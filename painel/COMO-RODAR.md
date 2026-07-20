@@ -7,7 +7,7 @@ zero script externo, tema claro/escuro por variáveis CSS.
 ## O caminho inteiro, três comandos
 
 ```
-cd Projetos_dados_abertos\Cargos_executivo_federal\painel
+cd C:\Users\theoa\dev\cargos-executivo-federal\painel
 Rscript 01_preparar_dados_painel.R   # parquets -> 7 tabelas agregadas
 Rscript 02_json_painel.R             # tabelas  -> dados_painel.json  (~27 KB)
 Rscript 03_montar_painel.R           # template + json -> vacancia-federal.html
