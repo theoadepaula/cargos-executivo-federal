@@ -1,0 +1,916 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vacância no Executivo federal — explorador da série 2016–2026</title>
+
+<!--
+  Painel dos cargos vagos no Executivo federal.
+
+  Mesmo idioma do painel do Relatorios_slu: HTML autocontido, dados embutidos em
+  JSON, gráficos em SVG construído à mão, zero script externo. Tema claro/escuro
+  por variáveis CSS, para herdar o tema do site.
+
+  NÃO edite `vacancia-federal.html` — ele é gerado. Edite este template e rode
+  `03_montar_painel.R`, que substitui o marcador na primeira linha do script
+  pelo conteúdo de `dados_painel.json`.
+-->
+
+<style>
+  /* ⚠️ As cores do modo claro NÃO são escritas aqui. O `03_montar_painel.R` as
+     injeta a partir do pacote `theoviz`, fonte única de estilo de todos os
+     projetos. Mudou uma cor? Muda no pacote e roda o script — nunca edite o
+     hexadecimal aqui, senão o painel volta a divergir dos artigos. */
+  :root {
+    color-scheme: light;
+    --plane:   #f9f9f7;
+    --surface: {{fundo}};
+    --ink:     {{forte}};
+    --ink-2:   {{media}};
+    --muted:   {{fraca}};
+    --grid:    {{grade}};
+    --axis:    {{eixo}};
+    --ring:    rgba(11,11,11,0.10);
+    --field:   #ffffff;
+    --s1: {{s1}}; --s2: {{s2}}; --s3: {{s3}}; --s4: {{s4}};
+    --tip-bg:  {{forte}};
+    --tip-ink: {{fundo}};
+    --aviso-bg: #fff6e5;
+  }
+  /* O modo escuro continua fixo: o `theoviz` ainda não tem variantes escuras.
+     Está anotado como pendência — ver COMO-RODAR.md. */
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+      --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+      --ring: rgba(255,255,255,0.14); --field: #232322;
+      --s1: #3987e5; --s2: #008300; --s3: #d55181; --s4: #c98500;
+      --tip-bg: #fcfcfb; --tip-ink: #0b0b0b;
+      --aviso-bg: #2a2415;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+    --ring: rgba(255,255,255,0.14); --field: #232322;
+    --s1: #3987e5; --s2: #008300; --s3: #d55181; --s4: #c98500;
+    --tip-bg: #fcfcfb; --tip-ink: #0b0b0b;
+    --aviso-bg: #2a2415;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0; background: var(--plane); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 68rem; margin: 0 auto;
+    padding: clamp(1.5rem,4vw,3rem) clamp(1rem,4vw,2rem) 4rem;
+    display: flex; flex-direction: column; gap: clamp(1.25rem,3vw,2rem);
+  }
+  .eyebrow { color: var(--muted); font-size:.78rem; letter-spacing:.06em;
+             text-transform:uppercase; margin:0 0 .35rem; }
+  h1 { font-size: clamp(1.5rem,3.5vw,2.1rem); line-height:1.15;
+       letter-spacing:-.02em; margin:0 0 .5rem; }
+  h2 { font-size:1.05rem; margin:0 0 .1rem; }
+  h3 { font-size:.92rem; margin:1.4rem 0 .5rem; }
+  .lede { color: var(--ink-2); max-width:60ch; margin:0; }
+  .card {
+    background: var(--surface); border:1px solid var(--ring);
+    border-radius:14px; padding: clamp(1rem,2.4vw,1.6rem);
+  }
+  .sub { color: var(--muted); font-size:.85rem; margin:.15rem 0 1rem; }
+
+  /* --- navegação por abas --- */
+  .abas { display:flex; flex-wrap:wrap; gap:.3rem; border-bottom:1px solid var(--grid); }
+  .aba {
+    all:unset; cursor:pointer; padding:.55rem .85rem; font-size:.87rem;
+    color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .aba:hover, .aba:focus-visible { color:var(--ink); }
+  .aba[aria-selected="true"] { color:var(--ink); font-weight:650;
+                               border-bottom-color:var(--s1); }
+  .pagina[hidden] { display:none; }
+  .pagina { display:flex; flex-direction:column; gap:clamp(1.25rem,3vw,2rem); }
+
+  /* --- figura herói --- */
+  .heroi { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 1rem; }
+  .heroi .n { font-size:clamp(3rem,8vw,4.5rem); font-weight:700; line-height:1;
+              letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+  .heroi .t { color:var(--ink-2); font-size:1.05rem; max-width:26ch; }
+  .heroi .p { color:var(--muted); font-size:.85rem; width:100%; margin-top:.35rem; }
+
+  /* --- KPIs --- */
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(11rem,1fr)); gap:.75rem; }
+  .kpi { background:var(--surface); border:1px solid var(--ring); border-radius:12px; padding:.9rem 1rem; }
+  .kpi .n { font-size:1.6rem; font-weight:650; letter-spacing:-.02em; line-height:1.1;
+            font-variant-numeric:tabular-nums; }
+  .kpi .k { font-size:.72rem; color:var(--muted); text-transform:uppercase;
+            letter-spacing:.05em; margin-bottom:.2rem; }
+  .kpi .v { font-size:.78rem; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+
+  /* --- controles --- */
+  .controls { display:flex; flex-wrap:wrap; gap:.75rem 1.25rem; align-items:flex-end;
+              margin-bottom:1.1rem; }
+  .ctl { display:flex; flex-direction:column; gap:.28rem; }
+  .ctl label { font-size:.72rem; color:var(--muted); font-weight:600; letter-spacing:.02em; }
+  select, button.btn {
+    font:inherit; font-size:.86rem; color:var(--ink); background:var(--field);
+    border:1px solid var(--axis); border-radius:8px; padding:.4rem .6rem;
+  }
+  button.btn { cursor:pointer; }
+
+  /* --- gráfico --- */
+  figure { margin:0; }
+  svg { display:block; width:100%; height:auto; overflow:visible; touch-action:pan-y; }
+  .gridline { stroke:var(--grid); stroke-width:1; }
+  .axisline { stroke:var(--axis); stroke-width:1; }
+  .tick { fill:var(--muted); font-size:11px; }
+  .lbl { font-size:11.5px; font-weight:650; }
+  .serie { fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .mk { stroke:var(--surface); stroke-width:2; }
+  .crosshair { stroke:var(--axis); stroke-width:1; stroke-dasharray:3 3; }
+  .hit { fill:transparent; }
+  .barra { transition:opacity .12s; }
+  .barra:hover { opacity:.75; }
+  .vlr { fill:var(--ink-2); font-size:11px; }
+  .cat { fill:var(--muted); font-size:11.5px; }
+
+  /* faixa dos meses defeituosos: aparecem MARCADOS, nunca apagados */
+  .ruim { fill:var(--muted); opacity:.13; }
+  .ausente { stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3; opacity:.7; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:.25rem 1rem; margin:.7rem 0 0; padding:0;
+            list-style:none; font-size:.8rem; color:var(--ink-2); }
+  .legend li { display:flex; align-items:center; gap:.4rem; }
+  .legend .dot { width:.65rem; height:.65rem; border-radius:50%; flex:none; }
+
+  .tip {
+    position:fixed; pointer-events:none; z-index:9; opacity:0; transition:opacity .1s;
+    background:var(--tip-bg); color:var(--tip-ink); border-radius:9px;
+    padding:.5rem .65rem; font-size:.78rem; line-height:1.45; min-width:9rem;
+    box-shadow:0 6px 20px rgba(0,0,0,.22);
+  }
+  .tip b { display:block; margin-bottom:.25rem; font-size:.8rem; }
+  .tip .row { display:flex; justify-content:space-between; gap:1rem;
+              font-variant-numeric:tabular-nums; }
+  .tip .sw { width:.55rem; height:.55rem; border-radius:50%; display:inline-block;
+             margin-right:.35rem; }
+  .tip .fim { color:var(--muted); }
+
+  /* --- tabelas --- */
+  table { border-collapse:collapse; width:100%; font-size:.82rem;
+          font-variant-numeric:tabular-nums; }
+  caption { text-align:left; color:var(--muted); font-size:.78rem; padding-bottom:.4rem; }
+  th, td { padding:.32rem .5rem; text-align:right; border-bottom:1px solid var(--grid); }
+  th:first-child, td:first-child { text-align:left; }
+  thead th { color:var(--ink); font-weight:650; border-bottom-color:var(--axis); }
+  thead th.ord { cursor:pointer; user-select:none; white-space:nowrap; }
+  thead th.ord:hover { color:var(--s1); }
+  thead th .seta { color:var(--muted); font-size:.7rem; }
+  .tablewrap { overflow-x:auto; margin-top:.9rem; }
+  .na { color:var(--muted); }
+
+  .aviso {
+    background:var(--aviso-bg); border-left:3px solid var(--s4);
+    padding:.8rem 1rem; border-radius:8px; font-size:.86rem; line-height:1.55;
+  }
+  .aviso strong { color:var(--ink); }
+  .note { font-size:.8rem; color:var(--muted); margin:.9rem 0 0; }
+  .note strong { color:var(--ink-2); }
+  footer { color:var(--muted); font-size:.78rem; border-top:1px solid var(--grid);
+           padding-top:1rem; }
+  a { color:inherit; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Executivo federal · 2016–2026</p>
+    <h1>Vacância no Executivo federal</h1>
+    <p class="lede">
+      Cento e vinte e cinco planilhas mensais do Painel Estatístico de Pessoal,
+      empilhadas numa série única. Um em cada três cargos que existem em lei
+      segue sem ninguém dentro — e metade deles nunca chegou a existir de fato.
+    </p>
+  </header>
+
+  <nav class="abas" role="tablist" aria-label="Seções do painel">
+    <button class="aba" role="tab" aria-selected="true"  data-p="p1">Panorama</button>
+    <button class="aba" role="tab" aria-selected="false" data-p="p2">Vacância fantasma</button>
+    <button class="aba" role="tab" aria-selected="false" data-p="p3">Onde faltam</button>
+    <button class="aba" role="tab" aria-selected="false" data-p="p4">Saídas e extinção</button>
+    <button class="aba" role="tab" aria-selected="false" data-p="p5">Método</button>
+  </nav>
+
+  <!-- ================= 1. Panorama ================= -->
+  <div class="pagina" id="p1" role="tabpanel">
+    <section class="heroi" id="heroi"></section>
+    <section class="kpis" id="kpis"></section>
+
+    <section class="card">
+      <h2>Cargos aprovados, ocupados e vagos</h2>
+      <p class="sub">Passe o mouse para ver os três valores do mês.</p>
+      <div class="controls">
+        <div class="ctl">
+          <label for="de">De</label><select id="de"></select>
+        </div>
+        <div class="ctl">
+          <label for="ate">Até</label><select id="ate"></select>
+        </div>
+      </div>
+      <figure><svg id="g-serie" role="img" aria-label="Série de cargos aprovados, ocupados e vagos"></svg></figure>
+      <ul class="legend">
+        <li><span class="dot" style="background:var(--s1)"></span>Aprovados em lei</li>
+        <li><span class="dot" style="background:var(--s2)"></span>Ocupados</li>
+        <li><span class="dot" style="background:var(--s3)"></span>Vagos</li>
+      </ul>
+      <p class="note">
+        Faixas cinza marcam meses com quebra de série; o tracejado vertical, os
+        dois meses que nunca foram publicados. A linha <strong>interrompe</strong>
+        nos dois casos — não interpola por cima do buraco.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Taxa de vacância</h2>
+      <p class="sub">Escala começando em zero, para não exagerar a variação.</p>
+      <figure><svg id="g-taxa" role="img" aria-label="Taxa de vacância ao longo do tempo"></svg></figure>
+    </section>
+  </div>
+
+  <!-- ================= 2. Vacância fantasma ================= -->
+  <div class="pagina" id="p2" role="tabpanel" hidden>
+    <section class="card">
+      <h2>Do que o cargo vago é feito</h2>
+      <p class="sub">
+        Metade dos cargos ditos vagos nunca foi distribuída a órgão nenhum.
+        Existem em lei, mas não têm sala, chefia nem concurso previsto.
+      </p>
+      <figure><svg id="g-decomp" role="img" aria-label="Decomposição do cargo vago"></svg></figure>
+      <ul class="legend">
+        <li><span class="dot" style="background:var(--s1)"></span>Nunca distribuído</li>
+        <li><span class="dot" style="background:var(--s3)"></span>Vago após distribuição</li>
+      </ul>
+      <p class="note">
+        Entre 2023 e 2025 a fração nunca distribuída salta de 35% para 52%.
+        Coincide com as reformas ministeriais — parte do movimento pode ser
+        reclassificação administrativa, não decisão de política de pessoal.
+        Separar as duas exige documentação normativa que o dado não traz.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Onde a vacância fantasma se concentra</h2>
+      <p class="sub" id="sub-orgaos"></p>
+      <figure><svg id="g-orgaos" role="img" aria-label="Órgãos com mais cargos nunca distribuídos"></svg></figure>
+    </section>
+  </div>
+
+  <!-- ================= 3. Onde faltam ================= -->
+  <div class="pagina" id="p3" role="tabpanel" hidden>
+    <section class="card">
+      <h2>Taxa de vacância por nível</h2>
+      <p class="sub" id="sub-nivel"></p>
+      <figure><svg id="g-nivel" role="img" aria-label="Taxa de vacância por nível"></svg></figure>
+    </section>
+
+    <section class="card">
+      <h2>Por nível, ao longo do tempo</h2>
+      <p class="sub">Janeiro de cada ano.</p>
+      <figure><svg id="g-nivel-tempo" role="img" aria-label="Taxa por nível ao longo do tempo"></svg></figure>
+      <p class="note">
+        <strong>Leia com cuidado:</strong> o nível de apoio cai porque os cargos
+        estão sendo extintos, não porque foram providos. Sem essa ressalva o
+        gráfico sugere melhora onde há desaparecimento.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Carreiras com maior vacância</h2>
+      <p class="sub">
+        Planos de carreira com pelo menos 2.000 cargos aprovados. Clique no
+        cabeçalho para reordenar.
+      </p>
+      <div class="tablewrap"><table id="t-carreiras"></table></div>
+    </section>
+  </div>
+
+  <!-- ================= 4. Saídas e extinção ================= -->
+  <div class="pagina" id="p4" role="tabpanel" hidden>
+    <section class="aviso">
+      <strong>Atenção: estes números são acumulados desde a origem da carreira.</strong>
+      Não são fluxo mensal. Um cargo que vagou por aposentadoria em 1998 ainda
+      conta aqui. A base não permite calcular quantos cargos vagaram em cada mês.
+    </section>
+
+    <section class="card">
+      <h2>Por que os cargos vagaram</h2>
+      <p class="sub" id="sub-saidas"></p>
+      <figure><svg id="g-saidas" role="img" aria-label="Composição das saídas"></svg></figure>
+      <p class="note">
+        Barras ordenadas, não pizza nem barra empilhada: com um motivo valendo
+        77%, as outras seis ficariam ilegíveis.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>A massa em extinção está encolhendo</h2>
+      <p class="sub">Servidores em cargos extintos por lei, janeiro de cada ano.</p>
+      <figure><svg id="g-extincao" role="img" aria-label="Servidores em cargos extintos"></svg></figure>
+      <h3>Cargos extintos com mais servidores dentro</h3>
+      <div class="tablewrap"><table id="t-extincao"></table></div>
+    </section>
+  </div>
+
+  <!-- ================= 5. Método ================= -->
+  <div class="pagina" id="p5" role="tabpanel" hidden>
+    <section class="card">
+      <h2>O que este painel não faz</h2>
+      <p class="sub">
+        Esta página é parte do argumento, não apêndice. Um painel que esconde os
+        defeitos da base mente por omissão.
+      </p>
+
+      <h3>1. Os sete meses que ficaram de fora</h3>
+      <div class="tablewrap"><table id="t-excluidos"></table></div>
+      <p class="note">
+        Cinco meses existem no acervo mas estão quebrados; dois nunca foram
+        publicados. Em nenhum caso a série interpola por cima.
+      </p>
+
+      <h3>2. “Cargo vago” não quer dizer posto de trabalho ocioso</h3>
+      <p class="lede">
+        Em toda a série, sem uma única exceção em 24.196 linhas, vale a identidade
+        <code>vago = aprovada − ocupada</code>. É definição contábil, não medição.
+        Um cargo criado em 2012 e nunca distribuído conta igual a um cargo do qual
+        alguém se aposentou no mês passado.
+      </p>
+
+      <h3>3. Os acumulados não são fluxo</h3>
+      <p class="lede">
+        As colunas de vacância por motivo acumulam desde a origem da carreira, sem
+        reinício. Não servem para calcular quantos cargos vagaram em um mês. Além
+        disso, 18,5% dos pares sofrem reprocessamento retroativo.
+      </p>
+
+      <h3>4. O escopo mudou em 2021</h3>
+      <p class="lede">
+        A entrada da ABIN na base, em agosto de 2021, alterou o escopo sem aviso na
+        documentação oficial.
+      </p>
+
+      <h3>5. “NA” no nível é Nível Apoio</h3>
+      <p class="lede">
+        Não é valor ausente. Lido como ausente, apaga 100.694 linhas em silêncio.
+      </p>
+    </section>
+  </div>
+
+  <footer id="rodape"></footer>
+</div>
+
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script>
+const D = DADOS_AQUI;
+
+const $  = s => document.querySelector(s);
+const el = s => document.querySelectorAll(s);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ---------- formatação pt-BR ---------- */
+const nf  = new Intl.NumberFormat('pt-BR');
+const nf1 = new Intl.NumberFormat('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
+const nf2 = new Intl.NumberFormat('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const n0 = v => v == null ? '—' : nf.format(Math.round(v));
+const p1 = v => v == null ? '—' : nf1.format(v) + '%';
+const p2 = v => v == null ? '—' : nf2.format(v) + '%';
+const mil = v => v == null ? '—' : nf.format(Math.round(v/1000)) + ' mil';
+
+const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const rotMes = c => MESES[(c % 100) - 1] + '/' + Math.floor(c/100);
+const anoDe  = c => Math.floor(c / 100);
+/* competência YYYYMM vira ano fracionário: o eixo fica proporcional ao tempo,
+   e os buracos de fevereiro/2019 e julho/2025 abrem sozinhos */
+const tempo  = c => anoDe(c) + ((c % 100) - 1) / 12;
+
+/* ---------- tabela: colunas -> linhas ---------- */
+function linhasDe(obj) {
+  const ks = Object.keys(obj);
+  if (!ks.length) return [];
+  const n = obj[ks[0]].length;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const o = {};
+    ks.forEach(k => o[k] = obj[k][i]);
+    out.push(o);
+  }
+  return out;
+}
+
+const MENSAL    = linhasDe(D.mensal);
+const NIVEL     = linhasDe(D.nivel);
+const ORGAOS    = linhasDe(D.orgaos);
+const CARREIRAS = linhasDe(D.carreiras);
+const SAIDAS    = linhasDe(D.saidas);
+const EXT_ANO   = linhasDe(D.extincao_ano);
+const EXT_TOP   = linhasDe(D.extincao_top);
+const EXCLUIDOS = linhasDe(D.excluidos);
+
+const estado = { de: anoDe(D.meta.primeiro_mes), ate: anoDe(D.meta.ultimo_mes) };
+const janela = () => MENSAL.filter(r => anoDe(r.competencia) >= estado.de &&
+                                        anoDe(r.competencia) <= estado.ate);
+
+/* ---------- eixos e escalas ---------- */
+const W = 900;
+function escalas(m, xs, lo, hi, H) {
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const x = t => m.l + (x1 === x0 ? 0 : (t - x0) / (x1 - x0) * (W - m.l - m.r));
+  const y = v => H - m.b - (v - lo) / (hi - lo) * (H - m.t - m.b);
+  return { x, y, x0, x1 };
+}
+
+/* passo "redondo" para o eixo: 1, 2, 2.5 ou 5 vezes uma potência de dez.
+   Sem isso o eixo sai com 9%, 18%, 27% — tecnicamente certo e ilegível. */
+function passoBonito(span, alvo = 5) {
+  const bruto = span / alvo;
+  const p10 = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const norm = bruto / p10;
+  const mult = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10;
+  return mult * p10;
+}
+
+function eixoY(m, lo, hi, y, fmt, H) {
+  const out = [], passo = passoBonito(hi - lo);
+  for (let v = lo; v <= hi + 1e-9; v += passo) {
+    const yy = y(v);
+    if (yy < m.t - 1) break;
+    out.push(`<line class="gridline" x1="${m.l}" x2="${W-m.r}" y1="${yy}" y2="${yy}"/>`);
+    out.push(`<text class="tick" x="${m.l-9}" y="${yy+4}" text-anchor="end">${fmt(v)}</text>`);
+  }
+  return out;
+}
+
+function eixoAnos(m, x, a0, a1, H) {
+  const out = [`<line class="axisline" x1="${m.l}" x2="${W-m.r}" y1="${H-m.b}" y2="${H-m.b}"/>`];
+  const passo = (a1 - a0) <= 3 ? 1 : 2;
+  for (let a = a0; a <= a1; a += passo) {
+    out.push(`<text class="tick" x="${x(a)}" y="${H-m.b+18}" text-anchor="middle">${a}</text>`);
+  }
+  return out;
+}
+
+/* faixas dos meses defeituosos e linhas dos ausentes.
+   Regra do projeto: mês defeituoso aparece marcado, nunca apagado. */
+function camadaRuins(m, x, H, a0, a1) {
+  const out = [];
+  const dentro = c => anoDe(c) >= a0 && anoDe(c) <= a1;
+  // a faixa nunca pode transbordar a área do gráfico: o mês excluído mais
+  // recente fica além do último ponto plotado e vazaria para fora do eixo
+  const corta = v => Math.max(m.l, Math.min(W - m.r, v));
+  const blocos = [[201803,201804],[202504,202507],[202606,202607]];
+  blocos.forEach(([ini,fim]) => {
+    if (!dentro(ini)) return;
+    const xa = corta(x(tempo(ini))), xb = corta(x(tempo(fim)));
+    if (xb - xa < 0.5) return;
+    out.push(`<rect class="ruim" x="${xa}" y="${m.t}" width="${Math.max(xb-xa,3)}" height="${H-m.t-m.b}"/>`);
+  });
+  D.meta.meses_ausentes.forEach(c => {
+    if (!dentro(c)) return;
+    const xx = x(tempo(c));
+    if (xx < m.l || xx > W - m.r) return;
+    out.push(`<line class="ausente" x1="${xx}" x2="${xx}" y1="${m.t}" y2="${H-m.b}"/>`);
+  });
+  return out;
+}
+
+/* ---------- tooltip ---------- */
+const tip = $('#tip');
+function mostraTip(ev, html) {
+  tip.innerHTML = html;
+  tip.style.opacity = 1;
+  const p = ev.touches ? ev.touches[0] : ev;
+  tip.style.left = Math.min(p.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px';
+  tip.style.top  = Math.max(8, p.clientY - tip.offsetHeight - 12) + 'px';
+}
+const escondeTip = () => tip.style.opacity = 0;
+
+/* ---------- gráfico de linhas no tempo ---------- */
+function linhasTempo(sel, dados, series, opts) {
+  const svg = $(sel), H = opts.h || 380;
+  const m = { t: 14, r: opts.r ?? 130, b: 34, l: 62 };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  if (!dados.length) { svg.innerHTML = ''; return; }
+
+  const xs = dados.map(d => tempo(d.competencia));
+  const vals = dados.flatMap(d => series.map(s => d[s.campo])).filter(v => v != null);
+  const lo = opts.lo ?? 0;
+  const hi = opts.hi ?? Math.max(...vals) * 1.08;
+  const { x, y } = escalas(m, xs, lo, hi, H);
+  const a0 = anoDe(dados[0].competencia), a1 = anoDe(dados[dados.length-1].competencia);
+
+  const out = [...camadaRuins(m, x, H, a0, a1),
+               ...eixoY(m, lo, hi, y, opts.fy, H),
+               ...eixoAnos(m, x, a0, a1, H)];
+
+  series.forEach(s => {
+    // quebra a linha onde o mês não existe na série: buraco é informação
+    let d = '', abrir = true, ant = null;
+    dados.forEach(r => {
+      const v = r[s.campo];
+      if (v == null) { abrir = true; return; }
+      // se pulou mais de um mês, a linha recomeça em vez de atravessar o buraco
+      if (ant != null && (tempo(r.competencia) - ant) > 1.5/12) abrir = true;
+      d += (abrir ? 'M' : 'L') + x(tempo(r.competencia)) + ' ' + y(v) + ' ';
+      abrir = false; ant = tempo(r.competencia);
+    });
+    out.push(`<path class="serie" d="${d}" stroke="${css(s.cor)}"/>`);
+    const ult = [...dados].reverse().find(r => r[s.campo] != null);
+    if (ult && m.r > 40) {
+      out.push(`<circle class="mk" cx="${x(tempo(ult.competencia))}" cy="${y(ult[s.campo])}" r="4" fill="${css(s.cor)}"/>`);
+      out.push(`<text class="lbl" x="${x(tempo(ult.competencia))+10}" y="${y(ult[s.campo])+4}" fill="${css(s.cor)}">${s.rotulo}</text>`);
+    }
+  });
+
+  out.push(`<line class="crosshair" id="${sel.slice(1)}-ch" x1="0" x2="0" y1="${m.t}" y2="${H-m.b}" style="opacity:0"/>`);
+  const larg = (W - m.l - m.r) / Math.max(dados.length - 1, 1);
+  dados.forEach((r,i) => {
+    out.push(`<rect class="hit" x="${x(tempo(r.competencia))-larg/2}" y="${m.t}" width="${larg}" height="${H-m.t-m.b}" data-i="${i}"/>`);
+  });
+
+  svg.innerHTML = out.join('');
+  const ch = svg.querySelector(`#${sel.slice(1)}-ch`);
+  svg.querySelectorAll('.hit').forEach(r => {
+    const mostra = ev => {
+      const d = dados[+r.dataset.i];
+      ch.setAttribute('x1', x(tempo(d.competencia)));
+      ch.setAttribute('x2', x(tempo(d.competencia)));
+      ch.style.opacity = 1;
+      const rows = series.map(s =>
+        `<div class="row"><span><span class="sw" style="background:${css(s.cor)}"></span>${s.rotulo}</span><span>${opts.ft(d[s.campo])}</span></div>`
+      ).join('');
+      const extra = opts.extra ? `<div class="row fim">${opts.extra(d)}</div>` : '';
+      mostraTip(ev, `<b>${rotMes(d.competencia)}</b>${rows}${extra}`);
+    };
+    r.addEventListener('mousemove', mostra);
+    r.addEventListener('touchstart', mostra, {passive:true});
+  });
+  svg.addEventListener('mouseleave', () => { escondeTip(); ch.style.opacity = 0; });
+}
+
+/* ---------- área empilhada ---------- */
+function areaEmpilhada(sel, dados, series, opts) {
+  const svg = $(sel), H = opts.h || 400;
+  const m = { t: 14, r: 20, b: 34, l: 62 };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const xs = dados.map(d => tempo(d.competencia));
+  const totais = dados.map(d => series.reduce((a,s) => a + (d[s.campo]||0), 0));
+  const hi = Math.max(...totais) * 1.05;
+  const { x, y } = escalas(m, xs, 0, hi, H);
+  const a0 = anoDe(dados[0].competencia), a1 = anoDe(dados[dados.length-1].competencia);
+
+  const out = [...camadaRuins(m, x, H, a0, a1),
+               ...eixoY(m, 0, hi, y, opts.fy, H),
+               ...eixoAnos(m, x, a0, a1, H)];
+
+  // Fatia a série em trechos contínuos: onde faltam meses, a área INTERROMPE
+  // em vez de atravessar o buraco. Mesma regra da linha — a faixa cinza marca a
+  // ausência, e a área não pode desmenti-la preenchendo por cima.
+  const trechos = [];
+  let atual = [];
+  dados.forEach((r,i) => {
+    if (atual.length && (xs[i] - xs[i-1]) > 1.5/12) { trechos.push(atual); atual = []; }
+    atual.push(i);
+  });
+  if (atual.length) trechos.push(atual);
+
+  // desenha de baixo para cima; cada faixa fecha sobre a anterior
+  let base = dados.map(() => 0);
+  series.forEach(s => {
+    const topo = dados.map((d,i) => base[i] + (d[s.campo]||0));
+    trechos.forEach(idx => {
+      if (idx.length < 2) return;
+      let d = 'M' + x(xs[idx[0]]) + ' ' + y(base[idx[0]]);
+      idx.forEach(i => d += ' L' + x(xs[i]) + ' ' + y(topo[i]));
+      for (let k = idx.length-1; k >= 0; k--) d += ' L' + x(xs[idx[k]]) + ' ' + y(base[idx[k]]);
+      d += ' Z';
+      out.push(`<path d="${d}" fill="${css(s.cor)}" stroke="var(--surface)" stroke-width="1"/>`);
+    });
+    base = topo;
+  });
+
+  out.push(`<line class="crosshair" id="${sel.slice(1)}-ch" x1="0" x2="0" y1="${m.t}" y2="${H-m.b}" style="opacity:0"/>`);
+  const larg = (W - m.l - m.r) / Math.max(dados.length - 1, 1);
+  dados.forEach((r,i) => out.push(
+    `<rect class="hit" x="${x(xs[i])-larg/2}" y="${m.t}" width="${larg}" height="${H-m.t-m.b}" data-i="${i}"/>`));
+
+  svg.innerHTML = out.join('');
+  const ch = svg.querySelector(`#${sel.slice(1)}-ch`);
+  svg.querySelectorAll('.hit').forEach(r => {
+    const mostra = ev => {
+      const d = dados[+r.dataset.i];
+      ch.setAttribute('x1', x(tempo(d.competencia)));
+      ch.setAttribute('x2', x(tempo(d.competencia)));
+      ch.style.opacity = 1;
+      const rows = [...series].reverse().map(s =>
+        `<div class="row"><span><span class="sw" style="background:${css(s.cor)}"></span>${s.rotulo}</span><span>${n0(d[s.campo])}</span></div>`
+      ).join('');
+      mostraTip(ev, `<b>${rotMes(d.competencia)}</b>${rows}` +
+        `<div class="row fim"><span>Nunca distribuído</span><span>${p1(d.fantasma)} do vago</span></div>`);
+    };
+    r.addEventListener('mousemove', mostra);
+    r.addEventListener('touchstart', mostra, {passive:true});
+  });
+  svg.addEventListener('mouseleave', () => { escondeTip(); ch.style.opacity = 0; });
+}
+
+/* ---------- barras horizontais ---------- */
+function barras(sel, dados, opts) {
+  const svg = $(sel);
+  const alt = opts.alt || 26, gap = 8;
+  const H = dados.length * (alt + gap) + 24;
+  const m = { t: 10, r: opts.r ?? 210, b: 10, l: opts.l ?? 200 };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const hi = Math.max(...dados.map(opts.valor)) * 1.02;
+  const x = v => m.l + v / hi * (W - m.l - m.r);
+  const out = [];
+
+  dados.forEach((d,i) => {
+    const yy = m.t + i * (alt + gap);
+    const cor = css(opts.cor ? opts.cor(d) : '--s1');
+    out.push(`<text class="cat" x="${m.l-10}" y="${yy+alt/2+4}" text-anchor="end">${opts.rotulo(d)}</text>`);
+    out.push(`<rect class="barra" x="${m.l}" y="${yy}" width="${Math.max(x(opts.valor(d))-m.l,1)}" height="${alt}" rx="4" fill="${cor}" data-i="${i}"/>`);
+    out.push(`<text class="vlr" x="${x(opts.valor(d))+8}" y="${yy+alt/2+4}">${opts.valorRot(d)}</text>`);
+  });
+
+  svg.innerHTML = out.join('');
+  svg.querySelectorAll('.barra').forEach(r => {
+    const mostra = ev => mostraTip(ev, opts.tip(dados[+r.dataset.i]));
+    r.addEventListener('mousemove', mostra);
+    r.addEventListener('touchstart', mostra, {passive:true});
+  });
+  svg.addEventListener('mouseleave', escondeTip);
+}
+
+/* ---------- linha anual simples, com área ---------- */
+function linhaAno(sel, dados, opts) {
+  const svg = $(sel), H = opts.h || 320;
+  const m = { t: 22, r: 30, b: 34, l: 62 };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const xs = dados.map(d => d.ano);
+  const hi = Math.max(...dados.map(opts.valor)) * 1.18;
+  const { x, y } = escalas(m, xs, 0, hi, H);
+  const out = [...eixoY(m, 0, hi, y, opts.fy, H, 3)];
+  out.push(`<line class="axisline" x1="${m.l}" x2="${W-m.r}" y1="${H-m.b}" y2="${H-m.b}"/>`);
+  dados.forEach(d => out.push(
+    `<text class="tick" x="${x(d.ano)}" y="${H-m.b+18}" text-anchor="middle">${d.ano}</text>`));
+
+  let area = 'M' + x(xs[0]) + ' ' + y(0);
+  dados.forEach(d => area += ' L' + x(d.ano) + ' ' + y(opts.valor(d)));
+  area += ' L' + x(xs[xs.length-1]) + ' ' + y(0) + ' Z';
+  out.push(`<path d="${area}" fill="${css('--s1')}" opacity=".13"/>`);
+
+  let ln = '';
+  dados.forEach((d,i) => ln += (i ? 'L' : 'M') + x(d.ano) + ' ' + y(opts.valor(d)) + ' ');
+  out.push(`<path class="serie" d="${ln}" stroke="${css('--s1')}"/>`);
+  dados.forEach(d => {
+    out.push(`<circle class="mk" cx="${x(d.ano)}" cy="${y(opts.valor(d))}" r="4.5" fill="${css('--s1')}"/>`);
+    out.push(`<text class="vlr" x="${x(d.ano)}" y="${y(opts.valor(d))-12}" text-anchor="middle">${n0(opts.valor(d))}</text>`);
+  });
+
+  const larg = (W - m.l - m.r) / Math.max(dados.length - 1, 1);
+  dados.forEach((d,i) => out.push(
+    `<rect class="hit" x="${x(d.ano)-larg/2}" y="${m.t}" width="${larg}" height="${H-m.t-m.b}" data-i="${i}"/>`));
+
+  svg.innerHTML = out.join('');
+  svg.querySelectorAll('.hit').forEach(r => {
+    const mostra = ev => mostraTip(ev, opts.tip(dados[+r.dataset.i]));
+    r.addEventListener('mousemove', mostra);
+    r.addEventListener('touchstart', mostra, {passive:true});
+  });
+  svg.addEventListener('mouseleave', escondeTip);
+}
+
+/* ---------- tabela ordenável ---------- */
+function tabela(sel, dados, cols, ordemInicial) {
+  const t = $(sel);
+  let ord = ordemInicial || { k: cols[0].k, dir: 1 };
+
+  function pinta() {
+    const linhas = [...dados].sort((a,b) => {
+      const va = a[ord.k], vb = b[ord.k];
+      if (typeof va === 'string') return ord.dir * va.localeCompare(vb, 'pt-BR');
+      return ord.dir * (va - vb);
+    });
+    const cab = cols.map(c =>
+      `<th class="ord" data-k="${c.k}">${c.rot}` +
+      (ord.k === c.k ? ` <span class="seta">${ord.dir > 0 ? '▲' : '▼'}</span>` : '') +
+      `</th>`).join('');
+    const corpo = linhas.map(r =>
+      '<tr>' + cols.map(c => `<td>${c.f ? c.f(r[c.k]) : r[c.k]}</td>`).join('') + '</tr>'
+    ).join('');
+    t.innerHTML = `<thead><tr>${cab}</tr></thead><tbody>${corpo}</tbody>`;
+    t.querySelectorAll('th.ord').forEach(th => th.addEventListener('click', () => {
+      const k = th.dataset.k;
+      // primeiro clique numa coluna nova: decrescente, que é o que se quer ver
+      ord = ord.k === k ? { k, dir: -ord.dir } : { k, dir: k === 'nome' || k === 'cargo' ? 1 : -1 };
+      pinta();
+    }));
+  }
+  pinta();
+}
+
+/* =================== montagem =================== */
+
+function montaCabecalho() {
+  const ini = MENSAL[0], fim = MENSAL[MENSAL.length-1];
+  $('#heroi').innerHTML =
+    `<div class="n">${p1(fim.taxa)}</div>` +
+    `<div class="t">dos cargos aprovados em lei estão vagos</div>` +
+    `<div class="p">${D.meta.ultimo_rotulo} · ${fim.taxa >= ini.taxa ? '+' : '−'}` +
+    `${nf2.format(Math.abs(fim.taxa - ini.taxa))} p.p. desde janeiro de 2016</div>`;
+
+  const kpi = (k, v, ini_, fim_) => {
+    const var_ = 100 * (fim_ / ini_ - 1);
+    return `<div class="kpi"><div class="k">${k}</div><div class="n">${n0(v)}</div>` +
+           `<div class="v">${var_ >= 0 ? '▲ +' : '▼ −'}${nf1.format(Math.abs(var_))}% desde 2016</div></div>`;
+  };
+  $('#kpis').innerHTML =
+    kpi('Aprovados em lei', fim.aprovada, ini.aprovada, fim.aprovada) +
+    kpi('Ocupados', fim.ocupada, ini.ocupada, fim.ocupada) +
+    kpi('Vagos', fim.vago, ini.vago, fim.vago) +
+    kpi('Nunca distribuídos', fim.nunca, ini.nunca, fim.nunca);
+
+  $('#rodape').innerHTML =
+    `Fonte: ${D.meta.fonte}. Elaboração própria a partir de 125 planilhas mensais. ` +
+    `Série de janeiro de 2016 a ${D.meta.ultimo_rotulo}; sete meses excluídos, ` +
+    `listados na aba Método. Dados gerados em ${D.meta.gerado_em}.`;
+}
+
+function montaControles() {
+  const anos = [...new Set(MENSAL.map(r => anoDe(r.competencia)))];
+  const opt = a => `<option value="${a}">${a}</option>`;
+  $('#de').innerHTML  = anos.map(opt).join('');
+  $('#ate').innerHTML = anos.map(opt).join('');
+  $('#de').value  = estado.de;
+  $('#ate').value = estado.ate;
+  const muda = () => {
+    estado.de  = +$('#de').value;
+    estado.ate = +$('#ate').value;
+    if (estado.de > estado.ate) { estado.ate = estado.de; $('#ate').value = estado.ate; }
+    desenhaPanorama();
+  };
+  $('#de').addEventListener('change', muda);
+  $('#ate').addEventListener('change', muda);
+}
+
+function desenhaPanorama() {
+  const d = janela();
+  linhasTempo('#g-serie', d, [
+    { campo:'aprovada', rotulo:'Aprovados', cor:'--s1' },
+    { campo:'ocupada',  rotulo:'Ocupados',  cor:'--s2' },
+    { campo:'vago',     rotulo:'Vagos',     cor:'--s3' }
+  ], { h:400, fy:mil, ft:n0, extra: r => `<span>Taxa</span><span>${p2(r.taxa)}</span>` });
+
+  linhasTempo('#g-taxa', d, [{ campo:'taxa', rotulo:'Taxa', cor:'--s3' }],
+    { h:300, r:70, lo:0, hi:40, fy:v => nf.format(Math.round(v)) + '%', ft:p2 });
+}
+
+function desenhaFantasma() {
+  areaEmpilhada('#g-decomp', MENSAL, [
+    { campo:'pos',   rotulo:'Vago após distribuição', cor:'--s3' },
+    { campo:'nunca', rotulo:'Nunca distribuído',      cor:'--s1' }
+  ], { h:400, fy:mil });
+
+  const soma = ORGAOS.reduce((a,o) => a + o.nunca, 0);
+  const total = MENSAL[MENSAL.length-1].nunca;
+  $('#sub-orgaos').textContent =
+    `Cargos nunca distribuídos, ${D.meta.ultimo_rotulo}. Os quinze maiores somam ` +
+    `${nf.format(soma)} — ${nf1.format(100*soma/total)}% do total.`;
+
+  barras('#g-orgaos', ORGAOS, {
+    l: 250, r: 200,
+    rotulo: d => d.nome.length > 38 ? d.nome.slice(0,37) + '…' : d.nome,
+    valor:  d => d.nunca,
+    valorRot: d => `${n0(d.nunca)}  ·  ${p1(d.pct)} da pasta`,
+    tip: d => `<b>${d.nome}</b>` +
+      `<div class="row"><span>Nunca distribuídos</span><span>${n0(d.nunca)}</span></div>` +
+      `<div class="row"><span>Aprovados na pasta</span><span>${n0(d.aprovada)}</span></div>` +
+      `<div class="row fim"><span>Fração da pasta</span><span>${p1(d.pct)}</span></div>`
+  });
+}
+
+function desenhaOndeFaltam() {
+  const ult = NIVEL.filter(r => r.competencia === D.meta.ultimo_mes)
+                   .sort((a,b) => b.taxa - a.taxa);
+  $('#sub-nivel').textContent = D.meta.ultimo_rotulo.charAt(0).toUpperCase() +
+                                D.meta.ultimo_rotulo.slice(1) + '.';
+  barras('#g-nivel', ult, {
+    l: 130, r: 240, alt: 30,
+    rotulo: d => d.nivel,
+    valor:  d => d.taxa,
+    valorRot: d => `${p1(d.taxa)}  ·  ${n0(d.vago)} cargos vagos`,
+    tip: d => `<b>Nível ${d.nivel}</b>` +
+      `<div class="row"><span>Aprovados</span><span>${n0(d.aprovada)}</span></div>` +
+      `<div class="row"><span>Ocupados</span><span>${n0(d.ocupada)}</span></div>` +
+      `<div class="row"><span>Vagos</span><span>${n0(d.vago)}</span></div>` +
+      `<div class="row fim"><span>Taxa</span><span>${p1(d.taxa)}</span></div>`
+  });
+
+  // janeiro de cada ano, uma coluna por nível
+  const jan = [...new Set(NIVEL.filter(r => r.competencia % 100 === 1)
+                               .map(r => r.competencia))].sort();
+  const serie = jan.map(c => {
+    const o = { competencia: c };
+    NIVEL.filter(r => r.competencia === c).forEach(r => o[r.nivel] = r.taxa);
+    return o;
+  });
+  linhasTempo('#g-nivel-tempo', serie, [
+    { campo:'Intermediário', rotulo:'Intermediário', cor:'--s3' },
+    { campo:'Superior',      rotulo:'Superior',      cor:'--s1' },
+    { campo:'Apoio',         rotulo:'Apoio',         cor:'--s2' }
+  ], { h:320, r:120, lo:0, hi:40, fy:v => nf.format(Math.round(v)) + '%', ft:p1 });
+
+  tabela('#t-carreiras', CARREIRAS, [
+    { k:'nome',     rot:'Carreira' },
+    { k:'aprovada', rot:'Aprovados', f:n0 },
+    { k:'ocupada',  rot:'Ocupados',  f:n0 },
+    { k:'vago',     rot:'Vagos',     f:n0 },
+    { k:'taxa',     rot:'Taxa de vacância', f:p1 }
+  ], { k:'taxa', dir:-1 });
+}
+
+function desenhaSaidas() {
+  const total = SAIDAS.reduce((a,s) => a + s.n, 0);
+  $('#sub-saidas').textContent =
+    `Acumulado desde a origem da carreira até ${D.meta.ultimo_rotulo}: ` +
+    `${nf.format(total)} cargos.`;
+
+  barras('#g-saidas', SAIDAS, {
+    l: 210, r: 190, alt: 24,
+    rotulo: d => d.motivo,
+    valor:  d => d.n,
+    valorRot: d => `${n0(d.n)}  ·  ${p1(d.pct)}`,
+    tip: d => `<b>${d.motivo}</b>` +
+      `<div class="row"><span>Cargos que vagaram</span><span>${n0(d.n)}</span></div>` +
+      `<div class="row fim"><span>Do total acumulado</span><span>${p1(d.pct)}</span></div>`
+  });
+
+  linhaAno('#g-extincao', EXT_ANO, {
+    h: 320, valor: d => d.ocupada, fy: mil,
+    tip: d => `<b>Janeiro de ${d.ano}</b>` +
+      `<div class="row"><span>Servidores</span><span>${n0(d.ocupada)}</span></div>` +
+      `<div class="row fim"><span>Tipos de cargo</span><span>${n0(d.tipos)}</span></div>`
+  });
+
+  tabela('#t-extincao', EXT_TOP, [
+    { k:'cargo',   rot:'Cargo' },
+    { k:'ocupada', rot:'Servidores', f:n0 },
+    { k:'orgaos',  rot:'Órgãos',     f:n0 }
+  ], { k:'ocupada', dir:-1 });
+}
+
+function desenhaMetodo() {
+  tabela('#t-excluidos', EXCLUIDOS, [
+    { k:'competencia', rot:'Competência' },
+    { k:'tipo',        rot:'Tipo' },
+    { k:'motivo',      rot:'Motivo' }
+  ], { k:'competencia', dir:1 });
+}
+
+/* ---------- abas ---------- */
+let desenhado = { p1:false, p2:false, p3:false, p4:false, p5:false };
+const desenhar = {
+  p1: desenhaPanorama, p2: desenhaFantasma, p3: desenhaOndeFaltam,
+  p4: desenhaSaidas,   p5: desenhaMetodo
+};
+function abrir(id) {
+  el('.aba').forEach(b => b.setAttribute('aria-selected', b.dataset.p === id));
+  el('.pagina').forEach(p => p.hidden = p.id !== id);
+  // desenha só na primeira visita: SVG de página escondida sai com largura zero
+  if (!desenhado[id]) { desenhar[id](); desenhado[id] = true; }
+}
+el('.aba').forEach(b => b.addEventListener('click', () => abrir(b.dataset.p)));
+
+/* ---------- início ---------- */
+montaCabecalho();
+montaControles();
+abrir('p1');
+
+// o SVG é responsivo por viewBox, mas os rótulos diretos podem colidir quando a
+// janela encolhe muito; redesenhar a página visível resolve sem custo perceptível
+let t_;
+addEventListener('resize', () => {
+  clearTimeout(t_);
+  t_ = setTimeout(() => {
+    const atual = [...el('.pagina')].find(p => !p.hidden);
+    if (atual) desenhar[atual.id]();
+  }, 200);
+});
+</script>

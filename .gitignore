@@ -1,0 +1,23 @@
+# Saida de build do Quarto -- reproduzivel, nao versionar
+_site/
+_freeze/
+.quarto/
+*_files/
+
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# SO
+Thumbs.db
+.DS_Store
+
+# Planilhas mensais do MGI: 103 MB, rebaixaveis por URL.
+# Reproduza com code/00_baixar.R; os checksums ficam versionados.
+dados_brutos/
+
+# ATENCAO: painel/dist/ NAO entra aqui de proposito. Sao 116 MB de Shinylive
+# (webR + pacotes em WASM) que o Cloudflare Pages serve direto -- ele nao roda R
+# para construir. Versionar o dist e o que torna o painel publicavel.

@@ -1,0 +1,746 @@
+<title>Painel: Explorador da vacância federal — rascunho</title>
+
+<style>
+  :root {
+    color-scheme: light;
+    --plane:      #f2f3f1;
+    --surface:    #fcfcfb;
+    --surface-2:  #f7f8f6;
+    --ink:        #0b0b0b;
+    --ink-2:      #52514e;
+    --ink-3:      #898781;
+    --rule:       #dcdedb;
+    --grid:       #e6e7e4;
+    --accent:     #2a78d6;
+    --s1: #2a78d6;
+    --s2: #008300;
+    --s3: #e87ba4;
+    --good: #006300;
+    --warn-bg: #fdf6e3;
+    --warn-ink: #6b5310;
+    --warn-rule: #e2cf94;
+    --shadow: 0 1px 2px rgba(11,11,11,.05), 0 8px 24px -12px rgba(11,11,11,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:     #0d0d0d;
+      --surface:   #1a1a19;
+      --surface-2: #212120;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --ink-3:     #898781;
+      --rule:      #333331;
+      --grid:      #2c2c2a;
+      --accent:    #3987e5;
+      --s1: #3987e5;
+      --s2: #008300;
+      --s3: #d55181;
+      --good: #0ca30c;
+      --warn-bg: #241f10;
+      --warn-ink: #e0cf9a;
+      --warn-rule: #4d4327;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:     #0d0d0d;
+    --surface:   #1a1a19;
+    --surface-2: #212120;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --ink-3:     #898781;
+    --rule:      #333331;
+    --grid:      #2c2c2a;
+    --accent:    #3987e5;
+    --s1: #3987e5;
+    --s2: #008300;
+    --s3: #d55181;
+    --good: #0ca30c;
+    --warn-bg: #241f10;
+    --warn-ink: #e0cf9a;
+    --warn-rule: #4d4327;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--plane);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px 96px; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: 56px 0 28px;
+    margin-bottom: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 600;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(28px, 4.4vw, 44px);
+    line-height: 1.08;
+    letter-spacing: -.022em;
+    font-weight: 680;
+    text-wrap: balance;
+  }
+  .standfirst {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--ink-2);
+    font-size: 17px;
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+    padding: 5px 11px 5px 9px;
+    border: 1px solid var(--warn-rule);
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    font-size: 12.5px;
+    font-weight: 600;
+    border-radius: 3px;
+  }
+  .status::before {
+    content: "";
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* ---------- panel screens ---------- */
+  .screen {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    margin-bottom: 40px;
+    overflow: hidden;
+  }
+  .screen-bar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface-2);
+    flex-wrap: wrap;
+  }
+  .screen-name {
+    font-size: 12px;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--ink-2);
+  }
+  .screen-q {
+    font-size: 13.5px;
+    color: var(--ink-3);
+    font-style: italic;
+  }
+  .screen-body { padding: 26px 22px 30px; }
+
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  .filter {
+    font-size: 12px;
+    padding: 4px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    color: var(--ink-2);
+    background: var(--surface);
+  }
+  .filter::after { content: " ▾"; color: var(--ink-3); }
+
+  /* ---------- hero ---------- */
+  .hero { display: flex; flex-direction: column; gap: 4px; margin-bottom: 26px; }
+  .hero-fig {
+    font-size: clamp(52px, 9vw, 76px);
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: -.03em;
+  }
+  .hero-say { font-size: 17px; color: var(--ink); max-width: 46ch; }
+  .hero-sub { font-size: 13.5px; color: var(--ink-3); }
+
+  /* ---------- kpi ---------- */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 30px;
+  }
+  .kpi { background: var(--surface); padding: 13px 15px 15px; display: flex; flex-direction: column; gap: 3px; }
+  .kpi-k { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 650; }
+  .kpi-v { font-size: 25px; font-weight: 660; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .kpi-d { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dn { color: var(--good); }
+  .up { color: var(--s3); }
+
+  /* ---------- chart ---------- */
+  .chart-head { margin-bottom: 10px; }
+  .chart-t { font-size: 14.5px; font-weight: 650; }
+  .chart-s { font-size: 12.5px; color: var(--ink-3); }
+  figure { margin: 0 0 8px; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+
+  .caption {
+    font-size: 12.5px;
+    color: var(--ink-3);
+    border-top: 1px solid var(--rule);
+    padding-top: 9px;
+    margin-top: 14px;
+    max-width: 74ch;
+  }
+
+  /* ---------- annotation ---------- */
+  .annot {
+    border-left: 2px solid var(--accent);
+    background: var(--surface-2);
+    padding: 11px 14px;
+    margin: 16px 0 0;
+    font-size: 13.5px;
+    color: var(--ink-2);
+    max-width: 68ch;
+    border-radius: 0 3px 3px 0;
+  }
+  .annot strong { color: var(--ink); font-weight: 650; }
+
+  .notice {
+    display: flex;
+    gap: 9px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-rule);
+    color: var(--warn-ink);
+    padding: 10px 13px;
+    border-radius: 3px;
+    font-size: 13px;
+    margin-bottom: 22px;
+  }
+  .notice b { font-weight: 700; }
+
+  /* ---------- bars ---------- */
+  .bars { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; }
+  .bar-row { display: grid; grid-template-columns: minmax(96px, 168px) 1fr auto; gap: 12px; align-items: center; }
+  .bar-lab { font-size: 13px; color: var(--ink-2); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-track { height: 17px; background: var(--grid); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 0 3px 3px 0; }
+  .bar-val { font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 600; min-width: 92px; }
+  .bar-val small { font-weight: 400; color: var(--ink-3); }
+
+  /* ---------- table ---------- */
+  .tw { overflow-x: auto; margin-top: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 460px; }
+  th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; font-variant-numeric: normal; }
+  th { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 650; border-bottom-color: var(--ink-3); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+  @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+
+  .split-rule { border: none; border-top: 1px solid var(--rule); margin: 28px 0 24px; }
+
+  /* ---------- method ---------- */
+  .method { border: 1px solid var(--rule); border-radius: 4px; padding: 24px 22px; background: var(--surface); }
+  .method h2 { margin: 0 0 6px; font-size: 19px; letter-spacing: -.015em; }
+  .method p { color: var(--ink-2); font-size: 14.5px; max-width: 68ch; }
+  .method ul { color: var(--ink-2); font-size: 14.5px; max-width: 68ch; padding-left: 20px; }
+  .method li { margin-bottom: 5px; }
+  h2.sec {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 700; margin: 0 0 14px;
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Rascunho para revisão · Projeto cargos vagos</div>
+    <h1>Explorador da vacância no Executivo federal</h1>
+    <p class="standfirst">
+      Simulação visual das quatro páginas do painel, com os dados reais já
+      compilados: 119 meses válidos entre janeiro de 2016 e maio de 2026.
+      Serve para você decidir estrutura e hierarquia antes de abrir o Power BI.
+    </p>
+    <span class="status">Não é o painel final — é o rascunho de layout</span>
+  </header>
+
+  <!-- ══════════ PÁGINA 1 ══════════ -->
+  <section class="screen">
+    <div class="screen-bar">
+      <span class="screen-name">Página 1 · Panorama</span>
+      <span class="screen-q">O que aconteceu com a vacância em dez anos?</span>
+      <div class="filters">
+        <span class="filter">Ano</span><span class="filter">Órgão</span><span class="filter">Nível</span>
+      </div>
+    </div>
+    <div class="screen-body">
+
+      <div class="hero">
+        <div class="hero-fig">33,1%</div>
+        <div class="hero-say">dos cargos aprovados em lei estão vagos</div>
+        <div class="hero-sub">Maio de 2026 · +0,44 ponto percentual desde janeiro de 2016</div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><span class="kpi-k">Aprovados</span><span class="kpi-v">699.858</span><span class="kpi-d dn">−11,3%</span></div>
+        <div class="kpi"><span class="kpi-k">Ocupados</span><span class="kpi-v">467.971</span><span class="kpi-d dn">−11,8%</span></div>
+        <div class="kpi"><span class="kpi-k">Vagos</span><span class="kpi-v">231.887</span><span class="kpi-d dn">−10,0%</span></div>
+        <div class="kpi"><span class="kpi-k">Nunca distribuídos</span><span class="kpi-v">114.737</span><span class="kpi-d up">+25,8%</span></div>
+      </div>
+
+      <div class="chart-head">
+        <div class="chart-t">Cargos aprovados, ocupados e vagos</div>
+        <div class="chart-s">2016–2026 · faixas cinza marcam meses excluídos por quebra de série</div>
+      </div>
+      <figure><svg id="c1" viewBox="0 0 940 300" role="img"
+        aria-label="Linhas de cargos aprovados, ocupados e vagos entre 2016 e 2026. Aprovados caem de 788 mil para 700 mil; ocupados de 531 mil para 468 mil; vagos de 258 mil para 232 mil."></svg></figure>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--s1)"></i>Aprovados em lei</span>
+        <span><i class="swatch" style="background:var(--s2)"></i>Ocupados</span>
+        <span><i class="swatch" style="background:var(--s3)"></i>Vagos</span>
+      </div>
+      <p class="caption">
+        As três séries caem juntas, em proporção quase idêntica. A distância entre
+        a linha azul e a verde — a vacância — mantém a mesma largura relativa do
+        começo ao fim da década.
+      </p>
+
+    </div>
+  </section>
+
+  <!-- ══════════ PÁGINA 2 ══════════ -->
+  <section class="screen">
+    <div class="screen-bar">
+      <span class="screen-name">Página 2 · A vacância fantasma</span>
+      <span class="screen-q">Metade dos cargos vagos jamais foi distribuída. Desde quando?</span>
+    </div>
+    <div class="screen-body">
+
+      <div class="chart-head">
+        <div class="chart-t">Do que o cargo vago é feito</div>
+        <div class="chart-s">Decomposição mensal · 2016–2026</div>
+      </div>
+      <figure><svg id="c2" viewBox="0 0 940 300" role="img"
+        aria-label="Área empilhada mostrando que a parcela nunca distribuída da vacância salta de cerca de 35% para 52% entre 2023 e 2025."></svg></figure>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--s1)"></i>Nunca distribuído — existe em lei, não foi alocado</span>
+        <span><i class="swatch" style="background:var(--s3)"></i>Vago após distribuição — alocado, sem servidor</span>
+      </div>
+
+      <div class="annot">
+        <strong>Entre 2023 e 2025 a fração nunca distribuída salta de 35% para 52%.</strong>
+        Nos oito anos anteriores ela ficara ancorada entre 31% e 36%. O período
+        coincide com as reformas ministeriais de 2023 — parte do movimento pode
+        ser reclassificação administrativa, e não decisão de política de pessoal.
+        O dado sozinho não separa as duas coisas.
+      </div>
+
+      <hr class="split-rule">
+
+      <div class="chart-head">
+        <div class="chart-t">Onde a vacância fantasma se concentra</div>
+        <div class="chart-s">Cargos nunca distribuídos, maio de 2026</div>
+      </div>
+      <div class="bars" id="b2"></div>
+      <p class="caption">
+        Treze órgãos concentram 80% do total; os três maiores fazem 56,5%. No MEC,
+        93,4% da estrutura autorizada nunca foi alocada — provavelmente porque
+        universidades e institutos têm códigos próprios na base, o que faz do
+        código central um reservatório. É hipótese, não conclusão.
+      </p>
+
+    </div>
+  </section>
+
+  <!-- ══════════ PÁGINA 3 ══════════ -->
+  <section class="screen">
+    <div class="screen-bar">
+      <span class="screen-name">Página 3 · Onde faltam</span>
+      <span class="screen-q">A vacância não é distribuída por igual. Onde ela morde?</span>
+      <div class="filters">
+        <span class="filter">Ano</span><span class="filter">Carreira</span><span class="filter">Entidade</span>
+      </div>
+    </div>
+    <div class="screen-body">
+
+      <div class="two-col">
+        <div>
+          <div class="chart-head">
+            <div class="chart-t">Taxa de vacância por nível</div>
+            <div class="chart-s">Maio de 2026</div>
+          </div>
+          <div class="bars" id="b3"></div>
+        </div>
+        <div>
+          <div class="chart-head">
+            <div class="chart-t">Trajetória por nível</div>
+            <div class="chart-s">Janeiro de cada ano · 2016–2026</div>
+          </div>
+          <figure><svg id="c3" viewBox="0 0 460 236" role="img"
+            aria-label="O nível superior mantém taxa estável em torno de 32%. O intermediário sobe de 34% para 40% em 2024 e recua para 38%. O nível de apoio despenca de 11% para cerca de 5%."></svg></figure>
+        </div>
+      </div>
+
+      <p class="caption">
+        O nível intermediário tem a pior taxa; o superior concentra o volume —
+        137.063 cargos vagos, 59% do total federal. A queda do nível de apoio
+        <b>não é boa notícia</b>: os cargos estão sendo extintos, e cargo em
+        extinção quase não gera vacância. O denominador é que está sumindo.
+      </p>
+
+    </div>
+  </section>
+
+  <!-- ══════════ PÁGINA 4 ══════════ -->
+  <section class="screen">
+    <div class="screen-bar">
+      <span class="screen-name">Página 4 · Saídas e extinção</span>
+      <span class="screen-q">Quais são as portas de saída — e o que vai desaparecer?</span>
+    </div>
+    <div class="screen-body">
+
+      <div class="notice">
+        <b>Atenção:</b>
+        <span>números acumulados desde a origem da carreira, <b>não</b> fluxo mensal.
+        Diferenciar mês a mês mistura vacância nova com reprocessamento de cadastro.</span>
+      </div>
+
+      <div class="chart-head">
+        <div class="chart-t">Composição das saídas</div>
+        <div class="chart-s">Acumulado até maio de 2026 · todas as carreiras</div>
+      </div>
+      <div class="bars" id="b4"></div>
+
+      <div class="annot">
+        <strong>A segunda causa é fuga interna, não externa.</strong>
+        Posse em cargo inacumulável (8,3%) supera exoneração (7,4%): mais gente
+        vaga um cargo por ter passado em outro concurso do que por pedir para
+        sair. E para cada demissão há 52 aposentadorias.
+      </div>
+
+      <hr class="split-rule">
+
+      <div class="two-col">
+        <div>
+          <div class="chart-head">
+            <div class="chart-t">Servidores em cargos extintos</div>
+            <div class="chart-s">Janeiro de cada ano · −4.400 ao ano</div>
+          </div>
+          <figure><svg id="c4" viewBox="0 0 460 200" role="img"
+            aria-label="Servidores em cargos em extinção caem de 56.432 em 2022 para 38.784 em 2026, em ritmo constante."></svg></figure>
+        </div>
+        <div>
+          <div class="chart-head">
+            <div class="chart-t">Maiores cargos em extinção</div>
+            <div class="chart-s">Servidores em atividade, maio de 2026</div>
+          </div>
+          <div class="tw">
+            <table>
+              <thead><tr><th>Cargo</th><th>Servidores</th><th>Órgãos</th></tr></thead>
+              <tbody>
+                <tr><td>Agente de Combate às Endemias</td><td>3.952</td><td>1</td></tr>
+                <tr><td>Guarda de Endemias</td><td>3.310</td><td>7</td></tr>
+                <tr><td>Agente de Saúde Pública</td><td>2.780</td><td>5</td></tr>
+                <tr><td>Datilógrafo</td><td>1.754</td><td>43</td></tr>
+                <tr><td>Agente de Portaria</td><td>1.656</td><td>47</td></tr>
+                <tr><td>Vigilante</td><td>1.473</td><td>88</td></tr>
+                <tr><td>Motorista Oficial</td><td>1.048</td><td>35</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <p class="caption">
+        37.725 servidores trabalham hoje em cargos que a lei já extinguiu. Não
+        aparecem em nenhuma estatística de falta de pessoal — estão ocupados. Mas
+        quando saírem, ninguém entra no lugar. Nesse ritmo, o estoque zera por
+        volta de 2035.
+      </p>
+
+    </div>
+  </section>
+
+  <!-- ══════════ MÉTODO ══════════ -->
+  <h2 class="sec">Página de método — acessível por link discreto</h2>
+  <div class="method">
+    <h2>Por que sete meses não aparecem neste painel</h2>
+    <p>
+      Esta página é parte do argumento, não apêndice. É ela que separa um painel
+      confiável de um dashboard bonito com número errado.
+    </p>
+    <ul>
+      <li><b>2019-02 e 2025-07</b> — não existem no acervo publicado. As linhas se interrompem; nada é interpolado.</li>
+      <li><b>2026-06</b> — último arquivo publicado, corrompido: as sete colunas de vacância inflam de 1,2× a 4,4× de uma vez.</li>
+      <li><b>2018-03</b> — dupla contagem: sete códigos de órgão novos publicados sobre os antigos, +23.440 devolvidos no mês seguinte.</li>
+      <li><b>2025-04 a 2025-06</b> — bolha de 5,8% em cargos aprovados, revertida em dois meses.</li>
+    </ul>
+    <p>
+      Também documentado ali: a identidade <b>vago = aprovados − ocupados</b>, que
+      vale em 100% das 24.196 linhas e explica por que "cargo vago" não significa
+      posto de trabalho ocioso; a entrada da ABIN na base em 2021, que desloca
+      qualquer total geral cruzando aquele ano; e o de-para que mapeia 233 códigos
+      de órgão em 222 entidades estáveis.
+    </p>
+  </div>
+
+</div>
+
+<script type="module">
+const S = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const el = (n, a = {}) => { const e = document.createElementNS(NS, n);
+  for (const k in a) e.setAttribute(k, a[k]); return e; };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+// trimestres reais da série compilada
+const D = [
+["2016-01",788584,530805,257779,91195,166584],["2016-04",788173,530597,257576,91870,165706],
+["2016-07",788108,531029,257079,88373,168706],["2016-10",788422,531386,257036,86856,170180],
+["2017-01",789717,532561,257156,85752,171404],["2017-04",795330,533214,262116,86511,175605],
+["2017-07",795240,530580,264660,85678,178982],["2017-10",794562,529438,265124,84807,180317],
+["2018-01",794587,529236,265351,83920,181431],["2018-04",783292,540011,243281,79591,163690],
+["2018-07",784808,537783,247025,80344,166681],["2018-10",784665,537723,246942,79609,167333],
+["2019-01",783549,534971,248578,80273,168305],["2019-04",776188,524618,251570,79614,171956],
+["2019-07",760241,517252,242989,84483,158506],["2019-10",755728,509531,246197,84325,161872],
+["2020-01",753763,506985,246778,86451,160327],["2020-04",736564,501830,234734,83527,151207],
+["2020-07",734839,497999,236840,83564,153276],["2020-10",733658,495204,238454,83403,155051],
+["2021-01",732671,495106,237565,83528,154037],["2021-04",731431,492060,239371,83698,155673],
+["2021-07",729961,488549,241412,84252,157160],["2021-10",732714,485806,246908,88275,158633],
+["2022-01",731677,484528,247149,88168,158981],["2022-04",730388,483033,247355,87907,159448],
+["2022-07",729032,481572,247460,86884,160576],["2022-10",727615,480660,246955,85937,161018],
+["2023-01",726663,478438,248225,87021,161204],["2023-04",725239,475832,249407,86555,162852],
+["2023-07",723821,473781,250040,88007,162033],["2023-10",722448,471753,250695,90685,160010],
+["2024-01",721629,470946,250683,113171,137512],["2024-04",713767,469761,244006,114370,129636],
+["2024-07",713190,468453,244737,124492,120245],["2024-10",711989,467467,244522,123752,120770],
+["2025-01",710918,466708,244210,126926,117284],["2025-10",701344,466610,234734,116534,118200],
+["2026-01",700570,467434,233136,115959,117177],["2026-04",700018,467857,232161,114737,117424]];
+
+const yr = d => +d[0].slice(0, 4) + (+d[0].slice(5, 7) - 1) / 12;
+const X0 = yr(D[0]), X1 = yr(D[D.length - 1]);
+
+function frame(svg, W, H, M, yMax, yMin = 0, ticks = 5, fmt = v => (v / 1000).toFixed(0) + "k") {
+  svg.textContent = "";
+  const px = v => M.l + (v - X0) / (X1 - X0) * (W - M.l - M.r);
+  const py = v => H - M.b - (v - yMin) / (yMax - yMin) * (H - M.t - M.b);
+  for (let i = 0; i <= ticks; i++) {
+    const v = yMin + (yMax - yMin) * i / ticks, y = py(v);
+    svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: y, y2: y,
+      stroke: css("--grid"), "stroke-width": 1 }));
+    const t = el("text", { x: M.l - 8, y: y + 4, "text-anchor": "end",
+      fill: css("--ink-3"), "font-size": 11 });
+    t.textContent = fmt(v); svg.appendChild(t);
+  }
+  for (let y = 2016; y <= 2026; y += 2) {
+    const t = el("text", { x: px(y), y: H - M.b + 18, "text-anchor": "middle",
+      fill: css("--ink-3"), "font-size": 11 });
+    t.textContent = y; svg.appendChild(t);
+  }
+  return { px, py };
+}
+
+// faixas dos meses excluídos + lacunas
+function marks(svg, px, H, M) {
+  const bands = [[2018 + 2 / 12, "2018-03"], [2025 + 3 / 12, "2025-04→06", 3],
+                 [2026 + 5 / 12, "2026-06"]];
+  bands.forEach(([s, lab, n = 1]) => {
+    const w = Math.max(4, (px(s + n / 12) - px(s)));
+    svg.appendChild(el("rect", { x: px(s), y: M.t, width: w, height: H - M.t - M.b,
+      fill: css("--ink-3"), opacity: .13 }));
+  });
+  [2019 + 1 / 12, 2025 + 6 / 12].forEach(g => {
+    svg.appendChild(el("line", { x1: px(g), x2: px(g), y1: M.t, y2: H - M.b,
+      stroke: css("--ink-3"), "stroke-width": 1, "stroke-dasharray": "3 3", opacity: .55 }));
+  });
+}
+
+function line(svg, pts, color, w = 2) {
+  svg.appendChild(el("path", { d: "M" + pts.map(p => p.join(" ")).join("L"),
+    fill: "none", stroke: color, "stroke-width": w,
+    "stroke-linejoin": "round", "stroke-linecap": "round" }));
+}
+function endLabel(svg, x, y, txt, color) {
+  svg.appendChild(el("circle", { cx: x, cy: y, r: 3.6, fill: color,
+    stroke: css("--surface"), "stroke-width": 2 }));
+  const t = el("text", { x: x + 9, y: y + 4, fill: color, "font-size": 12,
+    "font-weight": 650 });
+  t.textContent = txt; svg.appendChild(t);
+}
+
+function draw1() {
+  const svg = S("c1"), W = 940, H = 300, M = { t: 14, r: 74, b: 30, l: 46 };
+  const { px, py } = frame(svg, W, H, M, 820000, 180000);
+  marks(svg, px, H, M);
+  [[1, "--s1", "Aprovados"], [2, "--s2", "Ocupados"], [3, "--s3", "Vagos"]]
+    .forEach(([i, tok, name]) => {
+      const c = css(tok), pts = D.map(d => [px(yr(d)), py(d[i])]);
+      line(svg, pts, c);
+      const last = pts[pts.length - 1];
+      endLabel(svg, last[0], last[1], (D[D.length - 1][i] / 1000).toFixed(0) + "k", c);
+    });
+}
+
+function draw2() {
+  const svg = S("c2"), W = 940, H = 300, M = { t: 14, r: 74, b: 30, l: 46 };
+  const { px, py } = frame(svg, W, H, M, 280000, 0, 4);
+  marks(svg, px, H, M);
+  const top = D.map(d => [px(yr(d)), py(d[4] + d[5])]);
+  const mid = D.map(d => [px(yr(d)), py(d[4])]);
+  const base = H - M.b;
+  // vago após distribuição (fatia de cima)
+  svg.appendChild(el("path", {
+    d: "M" + top.map(p => p.join(" ")).join("L") + "L" +
+       mid.slice().reverse().map(p => p.join(" ")).join("L") + "Z",
+    fill: css("--s3"), opacity: .9 }));
+  // nunca distribuído (fatia de baixo)
+  svg.appendChild(el("path", {
+    d: "M" + mid.map(p => p.join(" ")).join("L") +
+       `L${mid[mid.length - 1][0]} ${base}L${mid[0][0]} ${base}Z`,
+    fill: css("--s1"), opacity: .92 }));
+  // vão de 2px entre as fatias
+  line(svg, mid, css("--surface"), 2);
+  const L = D[D.length - 1];
+  endLabel(svg, top[top.length - 1][0], py(L[4] + L[5] / 2), "117k", css("--s3"));
+  endLabel(svg, mid[mid.length - 1][0], py(L[4] / 2), "115k", css("--s1"));
+}
+
+function draw3() {
+  const svg = S("c3"), W = 460, H = 236, M = { t: 12, r: 46, b: 28, l: 34 };
+  const yrs = [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
+  const NI = [33.8, 34.5, 36.2, 33.2, 35.3, 35.1, 37.3, 39.1, 40.1, 38.5, 37.6];
+  const NS = [32.8, 32.0, 32.3, 32.0, 32.2, 32.0, 32.7, 32.2, 32.5, 32.8, 31.7];
+  const NA = [11.0, 11.6, 12.4, 3.6, 5.0, 2.2, 2.5, 3.4, 4.1, 4.9, 5.3];
+  svg.textContent = "";
+  const px = v => M.l + (v - 2016) / 10 * (W - M.l - M.r);
+  const py = v => H - M.b - v / 45 * (H - M.t - M.b);
+  [0, 15, 30, 45].forEach(v => {
+    const y = py(v);
+    svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: y, y2: y,
+      stroke: css("--grid"), "stroke-width": 1 }));
+    const t = el("text", { x: M.l - 7, y: y + 4, "text-anchor": "end",
+      fill: css("--ink-3"), "font-size": 10.5 });
+    t.textContent = v + "%"; svg.appendChild(t);
+  });
+  [2016, 2020, 2024].forEach(y => {
+    const t = el("text", { x: px(y), y: H - M.b + 17, "text-anchor": "middle",
+      fill: css("--ink-3"), "font-size": 10.5 });
+    t.textContent = y; svg.appendChild(t);
+  });
+  [[NI, "--s3", "NI"], [NS, "--s1", "NS"], [NA, "--s2", "NA"]].forEach(([ser, tok, lab]) => {
+    const c = css(tok), pts = ser.map((v, i) => [px(yrs[i]), py(v)]);
+    line(svg, pts, c);
+    const l = pts[pts.length - 1];
+    endLabel(svg, l[0], l[1], lab, c);
+  });
+}
+
+function draw4() {
+  const svg = S("c4"), W = 460, H = 200, M = { t: 14, r: 14, b: 28, l: 44 };
+  const yrs = [2022, 2023, 2024, 2025, 2026], v = [56432, 51342, 46228, 42172, 38784];
+  svg.textContent = "";
+  const px = i => M.l + i / 4 * (W - M.l - M.r);
+  const py = x => H - M.b - (x - 30000) / 30000 * (H - M.t - M.b);
+  [30000, 45000, 60000].forEach(g => {
+    const y = py(g);
+    svg.appendChild(el("line", { x1: M.l, x2: W - M.r, y1: y, y2: y,
+      stroke: css("--grid"), "stroke-width": 1 }));
+    const t = el("text", { x: M.l - 7, y: y + 4, "text-anchor": "end",
+      fill: css("--ink-3"), "font-size": 10.5 });
+    t.textContent = (g / 1000) + "k"; svg.appendChild(t);
+  });
+  const pts = v.map((x, i) => [px(i), py(x)]);
+  svg.appendChild(el("path", {
+    d: "M" + pts.map(p => p.join(" ")).join("L") +
+       `L${px(4)} ${H - M.b}L${px(0)} ${H - M.b}Z`,
+    fill: css("--s1"), opacity: .13 }));
+  line(svg, pts, css("--s1"));
+  pts.forEach((p, i) => {
+    svg.appendChild(el("circle", { cx: p[0], cy: p[1], r: 4,
+      fill: css("--s1"), stroke: css("--surface"), "stroke-width": 2 }));
+    const t = el("text", { x: p[0], y: H - M.b + 17, "text-anchor": "middle",
+      fill: css("--ink-3"), "font-size": 10.5 });
+    t.textContent = yrs[i]; svg.appendChild(t);
+  });
+  const t = el("text", { x: pts[0][0] + 6, y: pts[0][1] - 9, fill: css("--s1"),
+    "font-size": 12, "font-weight": 650 });
+  t.textContent = "56.432"; svg.appendChild(t);
+  const t2 = el("text", { x: pts[4][0], y: pts[4][1] - 11, "text-anchor": "end",
+    fill: css("--s1"), "font-size": 12, "font-weight": 650 });
+  t2.textContent = "38.784"; svg.appendChild(t2);
+}
+
+function bars(node, rows, max, fmt) {
+  node.innerHTML = "";
+  rows.forEach(r => {
+    const row = document.createElement("div"); row.className = "bar-row";
+    const lab = document.createElement("div"); lab.className = "bar-lab";
+    lab.textContent = r.k; lab.title = r.k;
+    const track = document.createElement("div"); track.className = "bar-track";
+    const fill = document.createElement("div"); fill.className = "bar-fill";
+    fill.style.width = (r.v / max * 100) + "%";
+    fill.style.background = r.c || "var(--s1)";
+    track.appendChild(fill);
+    const val = document.createElement("div"); val.className = "bar-val";
+    val.innerHTML = fmt(r);
+    row.append(lab, track, val); node.appendChild(row);
+  });
+}
+
+bars(S("b2"), [
+  { k: "MEC", v: 26687, p: "93,4%" }, { k: "Fazenda", v: 26655, p: "57,1%" },
+  { k: "Gestão e Inovação", v: 12194, p: "50,5%" }, { k: "Saúde", v: 5525, p: "8,6%" },
+  { k: "Agricultura", v: 3720, p: "39,5%" }, { k: "ABIN", v: 3130, p: "68,4%" },
+  { k: "Trabalho e Emprego", v: 3066, p: "35,9%" }, { k: "CGU", v: 2389, p: "47,2%" },
+  { k: "Órgão Central SIPEC", v: 2345, p: "100%" }
+], 26687, r => r.v.toLocaleString("pt-BR") + " <small>" + r.p + " da pasta</small>");
+
+bars(S("b3"), [
+  { k: "Intermediário", v: 37.9 }, { k: "Superior", v: 31.3 },
+  { k: "Apoio", v: 5.4 }
+], 40, r => r.v.toString().replace(".", ",") + "%");
+
+bars(S("b4"), [
+  { k: "Aposentadoria", v: 214061, p: "76,6%" },
+  { k: "Posse em cargo inacum.", v: 23067, p: "8,3%" },
+  { k: "Exoneração", v: 20672, p: "7,4%" },
+  { k: "Falecimento", v: 16927, p: "6,1%" },
+  { k: "Demissão", v: 4099, p: "1,5%" },
+  { k: "Promoção", v: 532, p: "0,2%" },
+  { k: "Readaptação", v: 79, p: "0,0%" }
+], 214061, r => r.v.toLocaleString("pt-BR") + " <small>" + r.p + "</small>");
+
+function all() { draw1(); draw2(); draw3(); draw4(); }
+all();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", all);
+new MutationObserver(all).observe(document.documentElement, {
+  attributes: true, attributeFilter: ["data-theme"] });
+</script>

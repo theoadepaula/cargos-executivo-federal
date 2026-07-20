@@ -1,0 +1,192 @@
+---
+title: "Por que os cargos vagam"
+subtitle: "77% é aposentadoria — e a segunda causa não é a que você imagina"
+date: today
+categories: [dados abertos, setor público, gestão de pessoas]
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(arrow)
+source(here::here("artigos", "_tema.R"))
+cargos <- read_parquet(here::here("dados", "cargos_por_orgao_cargo.parquet"))
+```
+
+Os dois artigos anteriores mediram estoque: quantos cargos estão vagos e de que
+tipo. Este mede a porta de saída. A partir de agosto de 2021, a base passou a
+registrar **por que** cada cargo vagou, em sete categorias.
+
+É o dado mais rico do conjunto. Também é o mais fácil de usar errado, e vou
+começar por aí.
+
+## Antes de qualquer número: o que este dado é
+
+As colunas de vacância **não são o fluxo do mês**. São contadores acumulados
+desde a origem da carreira.
+
+Testei isso de três formas. Se fossem eventos mensais, os valores subiriam e
+desceriam o tempo todo — mas apenas 1,05% das variações mês a mês são negativas.
+Se houvesse reinício anual, janeiro começaria perto de zero — mas a mediana de
+janeiro é idêntica à de todos os outros meses. E as séries individuais confirmam:
+um cargo do INSS parte de 16.962 aposentadorias em agosto de 2021 e sobe
+continuamente por cinco anos.
+
+Não há reset. O número é histórico acumulado.
+
+::: {.callout-warning}
+## O limite honesto deste artigo
+
+Seria tentador subtrair um mês do outro e chamar o resultado de "vacâncias do
+mês". Não funciona: 18,5% dos pares órgão-cargo sofrem **reprocessamento
+retroativo** — quedas no acumulado, geralmente acompanhadas de saltos na coluna
+de ocupados, o que sugere reclassificação de servidores entre cargos.
+
+A diferença mês a mês mistura vacância nova com correção de cadastro, e não há
+como separar as duas com o dado publicado.
+
+Por isso este artigo fala de **composição acumulada**, não de fluxo. É menos
+sedutor e é o que o dado sustenta.
+:::
+
+## A composição das saídas
+
+Total acumulado até maio de 2026, todas as carreiras do Executivo federal:
+
+| Motivo | Total | % |
+|---|---|---|
+| Aposentadoria | 214.061 | **76,6%** |
+| Posse em cargo inacumulável | 23.067 | 8,3% |
+| Exoneração | 20.672 | 7,4% |
+| Falecimento | 16.927 | 6,1% |
+| Demissão | 4.099 | 1,5% |
+| Promoção | 532 | 0,2% |
+| Readaptação | 79 | 0,0% |
+
+```{r}
+#| label: fig-composicao
+#| fig-cap: "Barras ordenadas, não pizza: com um motivo valendo 77%, uma pizza tornaria os outros seis ilegíveis."
+#| fig-height: 3.8
+
+comp <- cargos |>
+  filter(competencia == 202605) |>
+  summarise(across(starts_with("vacancia_por_"), \(x) sum(x, na.rm = TRUE))) |>
+  tidyr::pivot_longer(everything(), names_to = "motivo", values_to = "n") |>
+  mutate(motivo = recode(sub("vacancia_por_", "", motivo),
+           aposentadoria = "Aposentadoria", posse_cargo_inac = "Posse em cargo inacumulável",
+           exoneracao = "Exoneração", falecimento = "Falecimento",
+           demissao = "Demissão", promocao = "Promoção", readaptacao = "Readaptação"),
+         pct = 100 * n / sum(n),
+         motivo = forcats::fct_reorder(motivo, n),
+         tip = paste0("<b>", motivo, "</b><br>", tip_n(n), " cargos vagaram<br>",
+                      "<span style='color:", COR$ink3, "'>", pt(pct, 1),
+                      "% do total acumulado</span>"))
+
+p <- ggplot(comp, aes(n, motivo)) +
+  geom_col_interactive(aes(tooltip = tip, data_id = motivo),
+                       fill = COR$s1, width = .68) +
+  geom_text(aes(label = paste0(pt(n), "   ", pt(pct, 1), "%")),
+            hjust = -0.06, size = 3.2, colour = COR$ink2) +
+  scale_x_continuous(expand = expansion(mult = c(0, .26))) +
+  labs(title = "Por que os cargos vagaram",
+       subtitle = "Acumulado desde a origem da carreira até maio de 2026 — não é fluxo mensal",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos() +
+  theme(panel.grid.major.y = element_blank(), axis.text.x = element_blank())
+
+girafe_cargos(p, altura = 3.8, tipo = "barra")
+```
+
+Três leituras.
+
+### Aposentadoria domina, e isso é um relógio
+
+Três de cada quatro cargos que vagaram no Executivo federal vagaram por
+aposentadoria. Não é surpresa — mas a magnitude transforma a vacância num
+fenômeno demográfico antes de ser um fenômeno de gestão.
+
+Uma carreira ilustra bem. A **Carreira da Previdência, da Saúde e do Trabalho**
+acumula 54.509 aposentadorias e tem hoje 24.481 servidores ativos. **Mais que o
+dobro de gente já saiu do que está dentro.**
+
+### Demissão é estatisticamente irrelevante
+
+1,5% das saídas. Quatro mil casos em toda a série acumulada, contra 214 mil
+aposentadorias.
+
+O debate público sobre serviço público gasta uma quantidade desproporcional de
+energia com demissão de servidor. O dado diz que, como fenômeno de vacância, ela
+é ruído: para cada demissão, há 52 aposentadorias.
+
+### A segunda causa é fuga interna, não externa
+
+Este é o achado que eu não esperava. A segunda maior causa de vacância não é
+exoneração — é **posse em cargo inacumulável**, com 8,3% contra 7,4%.
+
+Ou seja: mais gente vaga um cargo por ter passado em outro concurso público
+inacumulável do que por simplesmente pedir para sair. O servidor não abandonou o
+Estado; trocou de posição dentro dele.
+
+Isso reposiciona a conversa sobre evasão no serviço público. Boa parte do que
+parece perda é migração interna — e migração interna tem direção, o que significa
+que existem carreiras que funcionam como trampolim e carreiras que funcionam como
+destino.
+
+## Onde a saída voluntária pesa
+
+Nem toda carreira se parece com a média. Filtrando as que têm ao menos 2.000
+servidores ativos, e olhando a fração das saídas que é exoneração:
+
+| Carreira | % das saídas por exoneração | Ativos |
+|---|---|---|
+| Procurador da Fazenda Nacional | **21,1%** | 2.236 |
+| Magistério Federal (superior) | 16,0% | 88.602 |
+| Finanças e Controle | 12,4% | 2.929 |
+| Cargos Técnico-Administrativos | 11,1% | 125.726 |
+| Plano Geral de Cargos (PGPE) | 9,6% | 11.800 |
+
+Contra uma média geral de 7,4%.
+
+Carreiras jurídicas e de controle — Procurador da Fazenda, Finanças e Controle —
+aparecem no topo. São carreiras de alta qualificação e alta mobilidade, cujos
+servidores têm mercado dentro e fora do Estado.
+
+O Magistério Federal chama atenção pelo volume: 16% de 88 mil ativos é uma
+proporção grande numa base grande.
+
+Um cuidado: essas são frações do **acumulado histórico**, não taxas anuais. Uma
+carreira criada recentemente tem acumulado pequeno em todas as categorias, e
+carreiras antigas carregam décadas de aposentadoria que empurram o percentual de
+exoneração para baixo. A comparação entre carreiras de idades muito diferentes
+não é limpa.
+
+## O que fazer com isso
+
+Se 76,6% da vacância vem de aposentadoria e a base registra o dado por carreira,
+existe um instrumento de planejamento aí que não está sendo usado. Saber quais
+carreiras já perderam mais gente do que têm é saber onde a reposição vai doer
+primeiro.
+
+É também o gancho do [próximo artigo](04-cargos-em-extincao.qmd): existem 38 mil
+servidores federais hoje em cargos que a lei já extinguiu. Eles não aparecem como
+vagos — estão ocupados, trabalhando. Mas quando essa gente se aposentar, ninguém
+entra no lugar. Por definição legal.
+
+## Como reproduzir
+
+```r
+library(arrow); library(dplyr)
+
+cargos <- read_parquet("dados/cargos_por_orgao_cargo.parquet")
+
+cargos |>
+  filter(competencia == 202605) |>          # nunca 202606: mês corrompido
+  summarise(across(starts_with("vacancia_por_"), \(x) sum(x, na.rm = TRUE)))
+```
+
+Lembre que os valores são acumulados. Não diferencie sem ler a ressalva do começo
+deste artigo.
+
+---
+
+*Próximo: [Os 38 mil servidores em cargos que a lei já matou](04-cargos-em-extincao.qmd).*

@@ -1,0 +1,40 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Cargos vagos no Executivo federal"
+  description: "Uma década de vacância na administração pública federal (2016–2026)"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Sobre o projeto
+      - href: dicionario_de_dados.qmd
+        text: Dicionário de dados
+      - text: Artigos
+        menu:
+          - artigos/01-panorama.qmd
+          - artigos/02-nunca-distribuidos.qmd
+          - artigos/03-por-que-vagam.qmd
+          - artigos/04-cargos-em-extincao.qmd
+          - artigos/05-onde-faltam.qmd
+          - artigos/06-diario-de-bordo.qmd
+      - href: painel/ESPECIFICACAO.md
+        text: Painel
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: true
+    code-tools: true
+    lang: pt-BR
+
+execute:
+  freeze: auto
+  warning: false
+  message: false
+  echo: false
+
+# os artigos leem os parquets por here::here() — precisam rodar da raiz
+execute-dir: project

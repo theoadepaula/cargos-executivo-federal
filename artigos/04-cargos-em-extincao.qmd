@@ -1,0 +1,229 @@
+---
+title: "Os 38 mil servidores em cargos que a lei já extinguiu"
+subtitle: "Ainda existem 1.754 datilógrafos no Executivo federal"
+date: today
+categories: [dados abertos, setor público, gestão de pessoas]
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(arrow)
+source(here::here("artigos", "_tema.R"))
+cargos <- read_parquet(here::here("dados", "cargos_por_orgao_cargo.parquet"))
+```
+
+Este artigo nasceu de uma hipótese minha que deu errado.
+
+A base marca cada cargo com um sinalizador: `cargo_em_extincao`, sim ou não. Um
+cargo em extinção é aquele que a lei aboliu para o futuro — quem está dentro
+continua, mas não há reposição. Quando o último sair, o cargo desaparece.
+
+Minha aposta era que esses cargos inflavam a estatística de vacância. Estrutura
+fantasma: milhares de postos legalmente mortos, contados como vagos, esperando um
+concurso que nunca viria.
+
+O dado desmente de forma categórica.
+
+## A hipótese errada
+
+Maio de 2026:
+
+| | Tipos de cargo | Aprovados | Ocupados | Vagos | Taxa de vacância |
+|---|---|---|---|---|---|
+| **Em extinção** | 3.519 | 38.070 | 37.725 | 345 | **0,9%** |
+| Não em extinção | 9.019 | 662.058 | 430.392 | 231.666 | 35,0% |
+
+Cargos em extinção são **99,1% ocupados**. Respondem por 0,1% de toda a vacância
+federal — 345 postos de 231.887.
+
+Faz sentido depois que se pensa: um cargo em extinção não pode ser provido. Se
+alguém sai, o cargo é extinto de fato, não fica vago. Vacância e extinção são
+quase mutuamente exclusivas por construção jurídica.
+
+A hipótese estava errada. Mas o número que apareceu no lugar dela é melhor.
+
+## O que realmente está ali
+
+**37.725 servidores federais trabalham hoje em cargos que a lei já condenou.**
+
+Não estão vagos. Não aparecem em nenhuma estatística de falta de pessoal. Estão
+em atividade, ocupando postos que, por decisão legislativa, não serão repostos
+quando eles saírem.
+
+É uma força de trabalho com data de validade.
+
+| Nível | Tipos de cargo | Servidores |
+|---|---|---|
+| Nível intermediário | 1.995 | 24.395 |
+| Nível de apoio | 1.214 | 12.275 |
+| Nível superior | 310 | 1.055 |
+
+A extinção é esmagadoramente de nível intermediário e de apoio. Nível superior
+quase não aparece: 1.055 servidores, menos de 3% do total.
+
+## Quem são
+
+Os doze cargos em extinção com mais gente dentro:
+
+```{r}
+#| label: fig-cargos
+#| fig-cap: "Duas famílias dominam: saúde pública de campo e apoio administrativo."
+#| fig-height: 4.2
+
+top <- cargos |>
+  filter(competencia == 202605, cargo_em_extincao == "S") |>
+  group_by(nome_cargo) |>
+  summarise(ocupada = sum(ocupada, na.rm = TRUE),
+            orgaos = n_distinct(orgao), .groups = "drop") |>
+  arrange(desc(ocupada)) |> head(10) |>
+  mutate(familia = if_else(grepl("ENDEMIA|SAUDE", nome_cargo), "saude", "outros"),
+         nome_cargo = stringr::str_to_sentence(nome_cargo),
+         nome_cargo = forcats::fct_reorder(nome_cargo, ocupada),
+         tip = paste0("<b>", nome_cargo, "</b><br>",
+                      tip_n(ocupada), " servidores<br>",
+                      "espalhados por ", orgaos,
+                      if_else(orgaos == 1, " órgão", " órgãos")))
+
+p <- ggplot(top, aes(ocupada, nome_cargo, fill = familia)) +
+  geom_col_interactive(aes(tooltip = tip, data_id = nome_cargo), width = .68) +
+  geom_text(aes(label = paste0(pt(ocupada), "   em ", orgaos,
+                               if_else(orgaos == 1, " órgão", " órgãos"))),
+            hjust = -0.06, size = 3.1, colour = COR$ink2) +
+  scale_fill_manual(values = c(saude = COR$s1, outros = COR$s3)) +
+  scale_x_continuous(expand = expansion(mult = c(0, .38))) +
+  labs(title = "Cargos em extinção com mais servidores dentro",
+       subtitle = "Maio de 2026 · azul: saúde pública de campo · rosa: apoio e serviços gerais",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos() +
+  theme(panel.grid.major.y = element_blank(), axis.text.x = element_blank())
+
+girafe_cargos(p, altura = 4.2, tipo = "barra")
+```
+
+| Cargo | Servidores | Órgãos |
+|---|---|---|
+| Agente de Combate às Endemias | 3.952 | 1 |
+| Guarda de Endemias | 3.310 | 7 |
+| Agente de Saúde Pública | 2.780 | 5 |
+| **Datilógrafo** | **1.754** | **43** |
+| Auxiliar Operacional de Serviços Diversos | 1.673 | 3 |
+| Agente de Portaria | 1.656 | 47 |
+| Vigilante | 1.473 | 88 |
+| Motorista Oficial | 1.048 | 35 |
+| Agente de Vigilância | 870 | 32 |
+
+Duas famílias dominam.
+
+**Saúde pública de campo.** Agente de Combate às Endemias, Guarda de Endemias e
+Agente de Saúde Pública somam 10.042 servidores — mais de um quarto de toda a
+massa em extinção. São as pessoas que fazem controle vetorial: dengue, Chagas,
+malária. A função não acabou; o cargo federal que a executava, sim.
+
+**Apoio administrativo e serviços gerais.** Portaria, vigilância, motorista,
+serviços diversos. É a categoria que a terceirização substituiu ao longo de
+décadas.
+
+E no meio da lista, 1.754 servidores em 43 órgãos ainda formalmente classificados
+como **datilógrafos**. Não é anedota: é o registro de que a estrutura de cargos
+do Estado brasileiro guarda camadas geológicas de funções que o mundo já
+abandonou.
+
+## O relógio está correndo
+
+```{r}
+#| label: fig-declinio
+#| fig-cap: "Queda quase linear: cerca de 4.400 servidores por ano ao longo de cinco anos."
+#| fig-height: 3.6
+
+decl <- cargos |>
+  filter(cargo_em_extincao == "S", mes == 1, !competencia %in% MESES_RUINS) |>
+  group_by(ano) |>
+  summarise(ocupada = sum(ocupada, na.rm = TRUE),
+            tipos = n_distinct(nome_cargo), .groups = "drop") |>
+  mutate(tip = paste0(
+    "<b>Janeiro de ", ano, "</b><br>",
+    tip_n(ocupada), " servidores<br>",
+    tip_n(tipos), " tipos de cargo<br>",
+    "<span style='color:", COR$ink3, "'>",
+    if_else(is.na(ocupada - lag(ocupada)), "primeiro ano da série",
+            paste0(tip_n(ocupada - lag(ocupada)), " em relação ao ano anterior")),
+    "</span>"))
+
+# a banda tem meia largura 0,5 porque aqui o eixo x é o ano, não uma data
+p <- ggplot(decl, aes(ano, ocupada)) +
+  geom_area(fill = COR$s1, alpha = .13) +
+  banda_hover(decl, col_x = "ano", meia_largura = 0.5) +
+  geom_line(colour = COR$s1, linewidth = .85) +
+  geom_point(colour = COR$s1, size = 2.1) +
+  geom_text(aes(label = pt(ocupada)), vjust = -1.5, size = 3.1, colour = COR$ink2) +
+  scale_y_continuous(labels = \(x) paste0(mil(x), " mil"),
+                     limits = c(0, 66000), breaks = seq(0, 60000, 20000)) +
+  scale_x_continuous(breaks = decl$ano) +
+  labs(title = "A massa em extinção está encolhendo",
+       subtitle = "Servidores em cargos extintos por lei, janeiro de cada ano",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos()
+
+girafe_cargos(p, altura = 3.6)
+```
+
+| Ano | Servidores | Tipos de cargo |
+|---|---|---|
+| 2022 | 56.432 | 1.217 |
+| 2023 | 51.342 | 1.180 |
+| 2024 | 46.228 | 1.137 |
+| 2025 | 42.172 | 1.120 |
+| 2026 | 38.784 | 1.070 |
+
+A massa cai de forma notavelmente regular: cerca de 4.400 servidores por ano,
+ritmo quase constante ao longo de cinco anos.
+
+Nesse passo, o estoque zera por volta de **2035**.
+
+Isso não é projeção sofisticada — é aritmética simples sobre uma tendência
+estável, e a saída tende a desacelerar conforme a população remanescente se
+esvazia dos mais velhos. Mas dá a ordem de grandeza: é uma transição em curso, de
+uma década, e não um problema distante.
+
+## Por que isso importa
+
+O [artigo anterior](03-por-que-vagam.qmd) mostrou que 76,6% das vacâncias federais
+vêm de aposentadoria. Aqui está um recorte em que a aposentadoria não gera
+vacância — gera **desaparecimento**.
+
+Quando um datilógrafo se aposenta, não abre vaga de datilógrafo. O cargo some. Se
+a função que ele exercia de fato ainda for necessária — e no caso dos agentes de
+endemias é evidente que é — ela precisa ser reabsorvida por outra estrutura:
+outro cargo, outro ente federativo, um contrato de terceirização.
+
+Essa transição está acontecendo com 4.400 pessoas por ano, silenciosamente, sem
+aparecer em nenhuma estatística de vacância. É invisível justamente porque esses
+postos estão **ocupados**.
+
+A pergunta que o dado deixa em aberto, e que ele não pode responder sozinho: para
+as funções que continuam necessárias, existe plano de sucessão — ou a extinção
+está sendo administrada por inércia?
+
+## Como reproduzir
+
+```r
+library(arrow); library(dplyr)
+
+cargos <- read_parquet("dados/cargos_por_orgao_cargo.parquet")
+
+cargos |>
+  filter(competencia == 202605, cargo_em_extincao == "S") |>
+  group_by(nome_cargo) |>
+  summarise(servidores = sum(ocupada, na.rm = TRUE),
+            orgaos = n_distinct(orgao)) |>
+  arrange(desc(servidores))
+```
+
+`cargo_em_extincao` só existe a partir de agosto de 2021 — é uma das colunas que
+entraram no segundo formato da base.
+
+---
+
+*Próximo: [Onde faltam](05-onde-faltam.qmd) — a vacância por nível de
+escolaridade.*

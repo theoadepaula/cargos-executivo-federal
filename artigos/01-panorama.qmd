@@ -1,0 +1,204 @@
+---
+title: "A década em que a máquina encolheu e a vacância não se mexeu"
+subtitle: "O que dez anos de dados de cargos públicos federais mostram — e o que não mostram"
+date: today
+categories: [dados abertos, setor público, série histórica]
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(arrow)
+source(here::here("artigos", "_tema.R"))
+orgaos <- read_parquet(here::here("dados", "cargos_por_orgao.parquet"))
+```
+
+Toda vez que sai uma reportagem sobre a máquina pública federal, aparece um
+número grande de cargos vagos. Duzentos e trinta mil, duzentos e cinquenta mil.
+O número vem de uma planilha que o governo publica todo mês e que quase ninguém
+abre duas vezes seguidas.
+
+Eu abri 125 delas, de janeiro de 2016 a junho de 2026, e empilhei tudo numa série
+única. A pergunta era simples: o que aconteceu com a vacância no Executivo
+federal ao longo de uma década?
+
+A resposta não é a que eu esperava.
+
+## As duas pontas
+
+| | Janeiro de 2016 | Maio de 2026 | Variação |
+|---|---|---|---|
+| Cargos aprovados em lei | 788.584 | 699.858 | −88.726 (−11,3%) |
+| Cargos ocupados | 530.805 | 467.971 | −62.834 (−11,8%) |
+| Cargos vagos | 257.779 | 231.887 | −25.892 (−10,0%) |
+| **Taxa de vacância** | **32,69%** | **33,13%** | **+0,44 p.p.** |
+
+Em dez anos, a taxa de vacância do Executivo federal subiu menos de meio ponto
+percentual. Ficou praticamente parada.
+
+O que se moveu foi o tamanho de tudo. Cargos autorizados, cargos ocupados e
+cargos vagos caíram todos em torno de 11% — quase na mesma proporção. O Executivo
+federal encolheu cerca de um nono ao longo da década, e encolheu de forma
+notavelmente uniforme.
+
+## Por que isso é mais interessante do que parece
+
+Existem duas maneiras de uma máquina pública encolher.
+
+Na primeira, você corta o que está vazio. Extingue cargos que ninguém ocupa,
+enxuga a estrutura autorizada até ela chegar perto da estrutura real. O resultado
+seria uma taxa de vacância **caindo**: menos buraco no papel, mesma gente
+trabalhando.
+
+Na segunda, você encolhe tudo junto. Perde servidores e perde autorizações
+legais na mesma proporção, mantendo intacta a distância entre o que a lei permite
+e o que existe de fato.
+
+Foi a segunda que aconteceu. A máquina não foi enxugada cortando o vazio — ela
+encolheu inteira, carregando o vazio junto. Um em cada três cargos que existem
+em lei segue sem ninguém dentro, exatamente como em 2016.
+
+```{r}
+#| label: fig-taxa
+#| fig-cap: "A taxa oscila dentro de uma faixa de três pontos ao longo de dez anos. Escala começando em zero para não exagerar a variação."
+#| fig-height: 3.6
+
+taxa <- orgaos |>
+  filter(!competencia %in% MESES_RUINS) |>
+  group_by(data) |>
+  summarise(taxa = 100 * sum(vago) / sum(aprovada), .groups = "drop") |>
+  quebrar_lacunas() |>
+  mutate(tip = paste0("<b>", tip_data(data), "</b><br>Taxa de vacância: ",
+                      pt(taxa, 2), "%"))
+
+p <- ggplot(taxa, aes(data, taxa)) +
+  camada_meses_ruins() +
+  geom_hline(yintercept = 32.69, colour = COR$ink3, linetype = "22", linewidth = .4) +
+  banda_hover(taxa) +
+  geom_line(colour = COR$s3, linewidth = .8) +
+  rotulo_fim(taxa, "data", "taxa", "33,1%", COR$s3) +
+  annotate("text", x = as.Date("2016-06-01"), y = 30.6,
+           label = "32,69% em jan/2016", colour = COR$ink3, size = 3.1, hjust = 0) +
+  scale_y_continuous(labels = \(x) paste0(pt(x), "%"), limits = c(0, 45),
+                     breaks = seq(0, 40, 10)) +
+  escala_x_serie(.10) +
+  labs(title = "Taxa de vacância: dez anos praticamente parada",
+       subtitle = "Cargos vagos como proporção dos aprovados em lei",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos()
+
+girafe_cargos(p, altura = 3.6)
+```
+
+## O que "cargo vago" não quer dizer
+
+Antes de qualquer leitura, uma coisa precisa ficar clara sobre esse número. Em
+toda a série, sem uma única exceção em 24.196 linhas, vale a identidade:
+
+$$\text{vago} = \text{aprovada} - \text{ocupada}$$
+
+Não é aproximação: é definição contábil. E isso significa que "cargo vago" **não
+mede posto de trabalho ocioso**. Mede a distância entre o que a lei autorizou e o
+que está provido.
+
+Um cargo criado por lei em 2012, nunca distribuído a órgão nenhum, nunca
+concursado, sem sala, sem mesa e sem chefia — conta como vago exatamente igual a
+um cargo do qual alguém se aposentou no mês passado.
+
+São situações completamente diferentes. A planilha tem uma coluna que separa as
+duas, `distribuida`, e ela é a menos usada de todas. É assunto do
+[próximo artigo](02-nunca-distribuidos.qmd), e é onde está o achado mais forte
+desta série.
+
+## A série completa
+
+```{r}
+#| label: fig-serie
+#| fig-cap: "As três séries caem juntas. Faixas cinza marcam meses com quebra de série; tracejado vertical, os meses não publicados."
+#| fig-height: 4.6
+
+serie <- orgaos |>
+  filter(!competencia %in% MESES_RUINS) |>
+  group_by(data) |>
+  summarise(across(c(aprovada, ocupada, vago), sum), .groups = "drop") |>
+  quebrar_lacunas() |>
+  mutate(tip = paste0(
+    "<b>", tip_data(data), "</b><br>",
+    "Aprovados em lei: ", tip_n(aprovada), "<br>",
+    "Ocupados: ", tip_n(ocupada), "<br>",
+    "Vagos: ", tip_n(vago), "<br>",
+    "<span style='color:", COR$ink3, "'>Taxa: ",
+    pt(100 * vago / aprovada, 2), "%</span>"))
+
+p <- ggplot(serie, aes(x = data)) +
+  camada_meses_ruins() +
+  banda_hover(serie) +
+  geom_line(aes(y = aprovada), colour = COR$s1, linewidth = .75) +
+  geom_line(aes(y = ocupada),  colour = COR$s2, linewidth = .75) +
+  geom_line(aes(y = vago),     colour = COR$s3, linewidth = .75) +
+  rotulo_fim(serie, "data", "aprovada", "Aprovados\nem lei", COR$s1) +
+  rotulo_fim(serie, "data", "ocupada",  "Ocupados",          COR$s2) +
+  rotulo_fim(serie, "data", "vago",     "Vagos",             COR$s3) +
+  scale_y_continuous(labels = \(x) paste0(mil(x), " mil"),
+                     limits = c(0, 850000), breaks = seq(0, 800000, 200000)) +
+  escala_x_serie(.16) +
+  labs(title = "Cargos aprovados, ocupados e vagos no Executivo federal",
+       subtitle = "Janeiro de 2016 a maio de 2026",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos()
+
+girafe_cargos(p, altura = 4.6)
+```
+
+## Os meses que joguei fora
+
+Nenhuma série pública sobrevive a dez anos sem defeito. Esta tem quatro, e todos
+importam para quem for reproduzir os números acima.
+
+**Faltam dois meses.** Fevereiro de 2019 e julho de 2025 não existem no acervo
+publicado. Não interpolei: a série tem buraco e o gráfico mostra buraco.
+
+**Junho de 2026 está corrompido.** No último arquivo publicado, `aprovada` salta
+3,3% de um mês para o outro e todas as colunas de vacância inflam de uma vez, de
+1,2× a 4,4×. Nada disso é evento real. Foi descartado — e é por isso que a tabela
+lá em cima termina em maio de 2026, não em junho.
+
+**Março de 2018 tem dupla contagem.** Sete códigos de órgão novos aparecem de uma
+vez, somando 22.758 cargos aprovados, enquanto os códigos antigos ainda não
+haviam saído. O total do painel salta +23.440 e devolve −34.455 no mês seguinte.
+Foi um mês de transição administrativa publicado com as duas estruturas
+sobrepostas.
+
+**Abril a junho de 2025 formam uma bolha.** `aprovada` sobe 5,8% e devolve 5,6%
+dois meses depois.
+
+::: {.callout-important}
+## Um erro que eu cometi, e por que ele está aqui
+
+A primeira versão desta análise usava junho de 2026 como ponto final e chegava a
+uma taxa de vacância de 35,1% — o que sugeria uma alta de 2,4 pontos na década.
+
+Estava errado. Aquele mês está quebrado na origem, e eu só descobri porque montei
+uma rotina que varre a série atrás de variações mensais acima de 2% (o normal
+deste painel é abaixo de 1%).
+
+Com o mês correto, a taxa é 33,13% e a alta é de 0,44 ponto. **A conclusão do
+artigo inverteu**: de "a vacância subiu" para "a vacância ficou parada enquanto a
+máquina encolheu".
+
+Deixo o registro porque é exatamente o que este projeto defende. O número que sai
+da planilha não é o número. É candidato a número até passar pela conferência.
+:::
+
+## Como reproduzir
+
+Todo o processamento está em [`code/01_compilar.R`](https://github.com/) — 125
+planilhas mensais viram dois arquivos Parquet em cerca de dez minutos. A rotina
+de conferência que pegou o erro acima está em `code/02_validar.R`, e roda sozinha.
+
+Os dados brutos originais estão versionados junto. Qualquer número citado aqui
+pode ser refeito do zero.
+
+---
+
+*Próximo: [Metade dos cargos "vagos" nunca existiu de verdade](02-nunca-distribuidos.qmd).*

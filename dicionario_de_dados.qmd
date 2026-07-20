@@ -1,0 +1,121 @@
+---
+title: "Dicionário de dados"
+subtitle: "Cargos vagos no Executivo federal, 2016–2026"
+---
+
+Duas tabelas, mesma origem, granularidades diferentes.
+
+## `cargos_por_orgao.parquet`
+
+Uma linha por órgão e mês. É a aba 1 de cada planilha mensal.
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `competencia` | inteiro | Mês de referência no formato `AAAAMM`, derivado do nome do arquivo |
+| `data` | data | Primeiro dia do mês de referência — use esta em séries temporais |
+| `ano`, `mes` | inteiro | Decomposição de `competencia`, por conveniência |
+| `era` | inteiro | Layout de origem: `1` até 2021-07, `2` de 2021-08 em diante |
+| `orgao` | inteiro | Código do órgão federal com dotação orçamentária |
+| `nome_orgao` | texto | Nome do órgão |
+| `sigla_orgao` | texto | Sigla do órgão |
+| `aprovada` | numérico | Cargos efetivos aprovados em lei |
+| `distribuida` | numérico | Cargos distribuídos pelo Órgão Central de Gestão de Pessoas |
+| `ocupada` | numérico | Cargos efetivos ocupados |
+| `vago` | numérico | Cargos efetivos vagos |
+| `arquivo_origem` | texto | Planilha de onde a linha veio — rastreabilidade |
+
+## `cargos_por_orgao_cargo.parquet`
+
+Uma linha por órgão, cargo e mês. É a aba 2. Tem todas as colunas acima, mais:
+
+| Coluna | Tipo | Descrição | Disponível |
+|---|---|---|---|
+| `cargo` | inteiro | Código do cargo efetivo no plano de cargos da carreira | toda a série |
+| `nome_cargo` | texto | Nome do cargo efetivo | toda a série |
+| `nivel` | texto | Escolaridade do cargo: `NA` (apoio), `NI` (intermediário), `NS` (superior) | toda a série |
+| `plano_carreira` | texto | Plano ou carreira de enquadramento | era 2 |
+| `cargo_em_extincao` | texto | `S` / `N` | era 2 |
+| `vacancia_por_exoneracao` | numérico | Vacâncias por exoneração no mês | era 2 |
+| `vacancia_por_demissao` | numérico | Vacâncias por demissão | era 2 |
+| `vacancia_por_promocao` | numérico | Vacâncias por promoção | era 2 |
+| `vacancia_por_readaptacao` | numérico | Vacâncias por readaptação | era 2 |
+| `vacancia_por_aposentadoria` | numérico | Vacâncias por aposentadoria | era 2 |
+| `vacancia_por_posse_cargo_inac` | numérico | Vacâncias por posse em outro cargo inacumulável | era 2 |
+| `vacancia_por_falecimento` | numérico | Vacâncias por falecimento | era 2 |
+
+::: {.callout-warning}
+## `NA` em `nivel` não é valor ausente
+
+`NA` é o **código de Nível Apoio**, ao lado de `NI` (intermediário), `NS`
+(superior) e `NM` (médio, raríssimo). A coluna está completa nas duas eras — só
+11 linhas em 913 mil estão de fato vazias.
+
+Cuidado ao ler o arquivo: leitores de planilha convertem a string `"NA"` em nulo
+por padrão, o que apaga silenciosamente todos os cargos de nível de apoio. Em R,
+use `read_excel(..., na = character())` ou confira a contagem por nível depois de
+importar. Nos parquets deste projeto o valor está preservado como texto.
+:::
+
+## Armadilhas
+
+**A identidade que governa o dado.** Vale em toda a série:
+
+$$\text{vago} = \text{aprovada} - \text{ocupada}$$
+
+Ou seja, `vago` não mede posto de trabalho ocioso: mede a distância entre o que a
+lei autorizou e o que está provido. Um cargo criado em lei e nunca distribuído a
+nenhum órgão conta como vago exatamente igual a um cargo que vagou ontem por
+aposentadoria. `distribuida` é a coluna que separa os dois casos — e é a menos
+usada de todas.
+
+**O escopo mudou no meio do caminho.** A nota técnica de 2018 declara que a base
+exclui o Banco Central e as carreiras de inteligência da ABIN. Mas a partir da
+era 2 a ABIN aparece com milhares de cargos aprovados. Comparações de total geral
+atravessando 2021 carregam essa quebra embutida.
+
+**As colunas de vacância são acumuladas desde a origem da carreira, e não têm
+reset.** Só 1,05% das variações mês a mês são negativas, e essas quedas se
+espalham por todos os meses do ano — não há reinício em janeiro nem no início da
+série. Um valor de 16.962 aposentadorias num cargo do INSS em 2021-08 é o total
+histórico daquele cargo, não o do ano.
+
+As quedas ocasionais são **reprocessamento retroativo**: 18,5% dos pares
+órgão-cargo têm ao menos uma. Por isso a diferença mês a mês **não** é o fluxo de
+vacâncias do mês — mistura vacâncias novas com correções de cadastro, sem como
+separar. O dado sustenta análise de *composição acumulada*; sustenta mal análise
+de *fluxo mensal*. Ver o artigo 3.
+
+**Descarte 2026-06.** No último mês do acervo todas as colunas de vacância inflam
+de uma vez (de 1,19× a 4,39×) e `aprovada` salta 3,3%. Outros períodos com
+variação anômala: 2025-04 a 2025-06 e 2018-03 a 2018-04. A varredura está em
+`code/02_validar.R`.
+
+**As duas abas divergem em 141 pares órgão-mês** (0,6% do total). A divergência é
+sistemática e restrita: apenas 4 órgãos — MJ e os ex-territórios do Amapá,
+Rondônia e Roraima — de 2023-06 em diante, com magnitude de 1% a 2,5%. A aba
+agregada reporta menos que a soma da aba detalhada. É inconsistência da fonte,
+não do empilhamento. Ao citar números desses órgãos, diga de qual aba vieram.
+
+**Faltam 2019-02 e 2025-07.** Não existem no acervo baixado.
+
+**Órgãos não são estáveis — use o de-para.** Reformas ministeriais partem, fundem
+e renumeram pastas. Dos 233 códigos da série, 178 são estáveis do início ao fim;
+os demais entram, saem ou trocam de código. `code/03_depara_orgaos.R` produz
+`dados/depara_orgaos.parquet`, com a coluna **`entidade`** (identidade
+institucional estável, para agregar séries longas) e **`bloco`** (agrupamento
+maior, para as cisões que não têm correspondência 1:1, como o desdobramento do
+Ministério da Fazenda em cinco pastas).
+
+**Cuidado com códigos que convivem.** Numa troca de código, o antigo costuma
+virar uma casca residual em vez de desaparecer: a AGU 40106 cai de 8.856 para 1
+cargo aprovado com zero ocupados, enquanto a 40116 abre com 9.074. Filtrar por
+sigla sem o de-para pega as duas.
+
+**2018-03 tem dupla contagem.** Sete códigos novos aparecem naquele mês somando
+22.758 cargos, sobre os antigos que ainda não haviam saído — o total salta
++23.440 e devolve −34.455 no mês seguinte. Descarte esse mês em rankings.
+
+## Fonte
+
+Painel Estatístico de Pessoal, Ministério da Gestão e da Inovação em Serviços
+Públicos. Nota técnica original em `dados_brutos/4.20180928-DadosRecursos-CargoVago.pdf`.

@@ -1,0 +1,226 @@
+---
+title: "Onde faltam: a vacância não é distribuída por igual"
+subtitle: "O nível intermediário tem a maior taxa; o superior concentra o volume"
+date: today
+categories: [dados abertos, setor público, gestão de pessoas]
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(arrow)
+source(here::here("artigos", "_tema.R"))
+cargos <- read_parquet(here::here("dados", "cargos_por_orgao_cargo.parquet"))
+```
+
+Uma taxa geral de vacância de 33% não diz muita coisa. Ela é a média de
+realidades bem diferentes, e o corte mais informativo da base não é por
+ministério — é por **nível de escolaridade do cargo**.
+
+## Os três níveis
+
+A base classifica cada cargo em nível de apoio (`NA`), intermediário (`NI`) ou
+superior (`NS`). Maio de 2026:
+
+```{r}
+#| label: fig-nivel
+#| fig-cap: "Os dois painéis apontam para lados diferentes: a taxa acusa o nível intermediário, o volume acusa o superior."
+#| fig-height: 3.4
+
+niv <- cargos |>
+  filter(competencia == 202605, nivel %in% c("NA", "NI", "NS")) |>
+  group_by(nivel) |>
+  summarise(aprovada = sum(aprovada, na.rm = TRUE),
+            vago     = sum(vago,     na.rm = TRUE), .groups = "drop") |>
+  mutate(taxa  = 100 * vago / aprovada,
+         nome  = recode(nivel, "NA" = "Apoio", "NI" = "Intermediário",
+                        "NS" = "Superior"),
+         nome  = forcats::fct_reorder(nome, taxa),
+         tip   = paste0("<b>Nível ", nome, "</b><br>",
+                        "Aprovados: ", tip_n(aprovada), "<br>",
+                        "Vagos: ", tip_n(vago), "<br>",
+                        "<span style='color:", COR$ink3, "'>Taxa: ",
+                        pt(taxa, 1), "%</span>"))
+
+g1 <- ggplot(niv, aes(taxa, nome)) +
+  geom_col_interactive(aes(tooltip = tip, data_id = nome),
+                       fill = COR$s1, width = .62) +
+  geom_text(aes(label = paste0(pt(taxa, 1), "%")), hjust = -0.12,
+            size = 3.3, colour = COR$ink2) +
+  scale_x_continuous(expand = expansion(mult = c(0, .22))) +
+  labs(title = "Taxa de vacância") +
+  tema_cargos() +
+  theme(panel.grid.major.y = element_blank(), axis.text.x = element_blank())
+
+g2 <- ggplot(niv |> mutate(nome = forcats::fct_reorder(nome, vago)),
+             aes(vago, nome)) +
+  geom_col_interactive(aes(tooltip = tip, data_id = nome),
+                       fill = COR$s3, width = .62) +
+  geom_text(aes(label = paste0(mil(vago), " mil")), hjust = -0.12,
+            size = 3.3, colour = COR$ink2) +
+  scale_x_continuous(expand = expansion(mult = c(0, .28))) +
+  labs(title = "Volume de cargos vagos") +
+  tema_cargos() +
+  theme(panel.grid.major.y = element_blank(), axis.text.x = element_blank())
+
+# o data_id é o mesmo nos dois painéis: passar o mouse num nível o acende nos
+# dois lados ao mesmo tempo, que é justamente o ponto do gráfico
+p <- patchwork::wrap_plots(g1, g2, nrow = 1) +
+  patchwork::plot_annotation(
+    subtitle = "Maio de 2026 · passe o mouse para acender o mesmo nível nos dois painéis",
+    caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.",
+    theme = tema_cargos())
+
+girafe_cargos(p, altura = 3.4, tipo = "barra")
+```
+
+| Nível | Aprovados | Ocupados | Vagos | Taxa de vacância | % do vago total |
+|---|---|---|---|---|---|
+| Superior | 438.397 | 301.334 | 137.063 | 31,3% | **59,1%** |
+| Intermediário | 247.417 | 153.742 | 93.675 | **37,9%** | 40,4% |
+| Apoio | 13.478 | 12.749 | 729 | 5,4% | 0,3% |
+
+Duas coisas ao mesmo tempo, e elas apontam para lados diferentes:
+
+**O nível intermediário tem a pior taxa.** 37,9% contra 31,3% do superior. Quase
+dois em cada cinco cargos de nível médio autorizados estão desprovidos.
+
+**O nível superior concentra o volume.** 137 mil cargos vagos, quase 60% de toda
+a vacância federal, simplesmente porque a base é muito maior.
+
+Qual dos dois é "o problema" depende da pergunta. Para capacidade de execução
+imediata, o volume do nível superior pesa mais. Para desenho de carreira e
+sustentabilidade da estrutura, a taxa do intermediário é o sinal.
+
+## O que mudou na década
+
+```{r}
+#| label: fig-nivel-tempo
+#| fig-cap: "Três trajetórias distintas. A queda do nível de apoio é efeito da extinção dos cargos, não de provimento."
+#| fig-height: 3.9
+
+evol <- cargos |>
+  filter(mes == 1, nivel %in% c("NA", "NI", "NS"), !competencia %in% MESES_RUINS) |>
+  group_by(ano, nivel) |>
+  summarise(aprovada = sum(aprovada, na.rm = TRUE),
+            ocupada  = sum(ocupada,  na.rm = TRUE), .groups = "drop") |>
+  mutate(taxa = 100 * (aprovada - ocupada) / aprovada,
+         nome = recode(nivel, "NA" = "Apoio", "NI" = "Intermediário",
+                       "NS" = "Superior"))
+
+fins <- evol |> group_by(nome) |> slice_max(ano, n = 1)
+
+bandas <- evol |>
+  group_by(ano) |>
+  summarise(tip = paste0("<b>Janeiro de ", first(ano), "</b><br>",
+                         paste(sprintf("%s: %s%%", nome, pt(taxa, 1)),
+                               collapse = "<br>")), .groups = "drop")
+
+p <- ggplot(evol, aes(ano, taxa, colour = nome)) +
+  banda_hover(bandas, col_x = "ano", meia_largura = 0.5) +
+  geom_line(linewidth = .85) +
+  geom_point(data = fins, size = 2) +
+  geom_text(data = fins, aes(label = paste0(nome, "  ", pt(taxa, 1), "%")),
+            hjust = -0.08, size = 3.2, fontface = "bold", show.legend = FALSE) +
+  scale_colour_manual(values = c("Intermediário" = COR$s3, "Superior" = COR$s1,
+                                 "Apoio" = COR$s2)) +
+  scale_y_continuous(labels = \(x) paste0(pt(x), "%"), limits = c(0, 45),
+                     breaks = seq(0, 40, 10)) +
+  scale_x_continuous(breaks = seq(2016, 2026, 2),
+                     expand = expansion(mult = c(.02, .30))) +
+  labs(title = "Taxa de vacância por nível de escolaridade",
+       subtitle = "Janeiro de cada ano, 2016–2026",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos()
+
+girafe_cargos(p, altura = 3.9)
+```
+
+Taxa de vacância, janeiro de cada ano:
+
+| Ano | Apoio | Intermediário | Superior |
+|---|---|---|---|
+| 2016 | 11,0% | 33,8% | 32,8% |
+| 2018 | 12,4% | 36,2% | 32,3% |
+| 2020 | 5,0% | 35,3% | 32,2% |
+| 2022 | 2,5% | 37,3% | 32,7% |
+| 2024 | 4,1% | **40,1%** | 32,5% |
+| 2026 | 5,3% | 37,6% | 31,7% |
+
+Três trajetórias distintas:
+
+**Nível superior: uma linha reta.** Entre 31,7% e 32,8% em toda a década. É
+notável quanta estabilidade há aqui — dez anos, quatro governos, duas reformas
+ministeriais, e a taxa oscila pouco mais de um ponto.
+
+**Nível intermediário: sobe e recua.** De 33,8% em 2016 até o pico de 40,1% em
+2024, e depois recuo para 37,6%. É o único nível com movimento relevante, e o
+único onde a situação claramente piorou no período.
+
+**Nível de apoio: some.** Cai de 11,0% para perto de 3% e fica lá. Mas essa
+queda não é boa notícia de provimento — é o efeito da extinção. Como
+[o artigo anterior](04-cargos-em-extincao.qmd) mostrou, os cargos de apoio estão
+sendo extintos em massa, e cargo em extinção quase não gera vacância. A taxa cai
+porque o denominador está desaparecendo, não porque as vagas foram preenchidas.
+
+Esse é o tipo de indicador que engana quem não conhece a estrutura por trás: uma
+melhora aparente que é, na verdade, o desaparecimento da categoria.
+
+## Sobre o corte por órgão
+
+A pergunta óbvia seria: quais ministérios estão piores?
+
+Eu tenho o dado e a comparação é tecnicamente viável — o de-para de órgãos
+(`code/03_depara_orgaos.R`) resolve as trocas de código que quebrariam a série.
+Mas escolhi não publicar ranking nominal de pastas, por duas razões.
+
+A primeira é técnica. Órgãos têm tamanhos e naturezas incomparáveis; um ranking
+de taxa põe uma agência de 300 cargos ao lado de um ministério de 60 mil, e o
+topo da lista acaba dominado por ruído estatístico de unidades pequenas.
+
+A segunda é de contexto. Rankings nominais de desempenho entre pastas viram
+manchete descolada da análise, e a diferença entre elas quase sempre reflete
+histórico de concursos e desenho de carreira, não gestão corrente.
+
+O recorte por **carreira** responde melhor à mesma pergunta, sem esses problemas.
+Fica para um artigo próprio.
+
+## Uma armadilha técnica, para quem for reproduzir
+
+O código de Nível Apoio na base é a string `"NA"`. A maioria dos leitores de
+planilha converte `"NA"` em valor nulo por padrão — e isso **apaga silenciosamente
+todos os cargos de nível de apoio** da sua análise.
+
+Eu caí nessa. Na primeira leitura da base concluí que a coluna `nivel` vinha
+vazia no período antigo. Não vinha: eram 100.694 linhas de nível de apoio sendo
+lidas como ausentes.
+
+```r
+# errado — perde os cargos de apoio
+readxl::read_excel(arquivo)
+
+# certo
+readxl::read_excel(arquivo, na = character())
+```
+
+Nos arquivos Parquet deste projeto o valor está preservado como texto.
+
+## Como reproduzir
+
+```r
+library(arrow); library(dplyr)
+
+cargos <- read_parquet("dados/cargos_por_orgao_cargo.parquet")
+
+cargos |>
+  filter(competencia == 202605, nivel %in% c("NA", "NI", "NS")) |>
+  group_by(nivel) |>
+  summarise(aprovada = sum(aprovada, na.rm = TRUE),
+            ocupada  = sum(ocupada,  na.rm = TRUE)) |>
+  mutate(taxa_vacancia = 100 * (aprovada - ocupada) / aprovada)
+```
+
+---
+
+*Próximo: [Diário de bordo](06-diario-de-bordo.qmd) — tudo que deu errado no
+caminho, e por que isso é a parte mais útil.*

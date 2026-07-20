@@ -1,0 +1,57 @@
+---
+title: "Cargos vagos no Executivo federal"
+subtitle: "Uma década de vacância na administração pública, 2016–2026"
+---
+
+## O que é isto
+
+Todo mês, o Painel Estatístico de Pessoal publica uma planilha com quantos
+cargos efetivos existem em lei no Executivo federal, quantos foram distribuídos
+aos órgãos, quantos estão ocupados e quantos estão vagos. Cada planilha é um
+retrato de um mês. Ninguém publica o filme.
+
+Este projeto empilha 125 planilhas mensais — de janeiro de 2016 a junho de 2026 —
+em duas tabelas únicas e analisáveis, e usa essa série para responder perguntas
+que nenhuma planilha isolada responde.
+
+## Por que importa
+
+A vacância é o indicador silencioso da capacidade estatal. Um órgão pode ter sua
+estrutura intacta no papel e estar operando com metade da gente. A diferença
+entre o cargo que existe em lei e o servidor que aparece para trabalhar é onde
+mora boa parte da conversa sobre o que o Estado brasileiro consegue e não
+consegue entregar.
+
+E é uma conversa que costuma ser feita com anedota. Este dado permite fazê-la
+com série histórica.
+
+## Os artigos
+
+1. [**A década em que a máquina encolheu e a vacância não se mexeu**](artigos/01-panorama.qmd)
+   — tudo caiu 11%, e a taxa de vacância ficou parada.
+2. [**Metade dos cargos vagos nunca existiu de verdade**](artigos/02-nunca-distribuidos.qmd)
+   — a coluna que ninguém olha separa o buraco real do buraco de papel.
+3. [**Por que os cargos vagam**](artigos/03-por-que-vagam.qmd) — 77% é
+   aposentadoria, e a segunda causa não é a que você imagina.
+4. [**Os 38 mil servidores em cargos que a lei já extinguiu**](artigos/04-cargos-em-extincao.qmd)
+   — ainda existem 1.754 datilógrafos no Executivo federal.
+5. [**Onde faltam**](artigos/05-onde-faltam.qmd) — a vacância por nível de
+   escolaridade, e um indicador que engana.
+6. [**Diário de bordo**](artigos/06-diario-de-bordo.qmd) — seis erros entre a
+   planilha e o número.
+
+## O painel
+
+O [Explorador da vacância federal](painel/ESPECIFICACAO.md) leva a série a quatro
+páginas navegáveis. A especificação, o script que prepara as tabelas e um
+rascunho visual estão em `painel/`.
+
+## Reprodutibilidade
+
+Todo o processamento está em `code/01_compilar.R`. Os dados brutos originais
+estão versionados em `dados_brutos/`. Qualquer número citado nos artigos pode ser
+refeito do zero rodando o script.
+
+O método está documentado no [dicionário de dados](dicionario_de_dados.qmd),
+inclusive as armadilhas — a quebra de escopo em 2021, os dois meses ausentes e a
+instabilidade dos códigos de órgão ao longo das reformas ministeriais.

@@ -1,0 +1,182 @@
+---
+title: "Diário de bordo: seis erros entre a planilha e o número"
+subtitle: "O que aconteceu entre baixar 125 arquivos e confiar em qualquer coisa"
+date: today
+categories: [dados abertos, método, mão na massa]
+---
+
+Os cinco artigos anteriores mostram resultados. Este mostra o caminho — e é o
+mais útil dos seis para quem trabalha com dado público.
+
+Baixei 125 planilhas mensais do Painel Estatístico de Pessoal, de janeiro de 2016
+a junho de 2026, e empilhei tudo em duas tabelas. A operação parece trivial: ler,
+concatenar, salvar. Levou uma tarde e produziu, na primeira versão, **números
+errados que pareciam completamente plausíveis**.
+
+Esse é o problema. Dado público quase nunca vem quebrado de forma óbvia. Vem
+quebrado de forma discreta, com aparência de normalidade, e o erro só aparece se
+você for procurar.
+
+Aqui está o que encontrei, em ordem de gravidade.
+
+## 1. A linha de total escondida no rodapé
+
+**O erro:** o arquivo de janeiro de 2019 traz, na última linha, um total geral —
+sem código de órgão, sem nome, só os números somados. Meu script empilhou aquilo
+junto com as outras linhas.
+
+Resultado: janeiro de 2019 apareceu com 1.567.098 cargos aprovados, contra
+784.199 no mês anterior. Exatamente o dobro.
+
+**Como apareceu:** não apareceu sozinho. Eu só encontrei porque montei uma rotina
+que varre a série atrás de variações mensais acima de 2%, sabendo que a variação
+normal deste painel é abaixo de 1%.
+
+**O que me enganou primeiro:** minha checagem inicial contava órgãos distintos
+por mês e comparava com o número de linhas. A linha-total passou ileso, porque o
+código de órgão vazio conta como um valor distinto. A verificação estava certa e
+era inútil.
+
+**A correção:**
+
+```r
+filter(!is.na(orgao), orgao != "")
+```
+
+Uma linha. Encontrar que ela era necessária custou o dia.
+
+## 2. O último arquivo publicado está corrompido
+
+Junho de 2026 é o mês mais recente do acervo. É também o único em que todas as
+sete colunas de vacância inflam simultaneamente — de 1,19× a 4,39× — e o total de
+cargos aprovados salta 3,3% depois de meses variando 0,02%.
+
+Nenhum evento administrativo faz isso com sete contadores independentes de uma
+vez. É quebra de série.
+
+**A lição desconfortável:** o dado mais novo é o menos confiável. É o que passou
+por menos revisão, e é justamente o que qualquer análise quer usar como ponto
+final. Eu usei — e publiquei internamente uma conclusão errada por causa disso.
+
+Antes: "a taxa de vacância subiu 2,4 pontos na década."
+Depois: "a taxa ficou parada; a máquina é que encolheu."
+
+A conclusão do artigo principal inverteu por causa de um mês.
+
+## 3. Contadores acumulados disfarçados de fluxo mensal
+
+As colunas de vacância por motivo — aposentadoria, exoneração, falecimento —
+parecem, pelo nome, registrar os eventos do mês. Não registram. São acumuladas
+desde a origem da carreira.
+
+**O sinal que denuncia:** um único cargo do MAPA registrava 123 aposentadorias.
+Implausível como fluxo mensal, óbvio como acumulado.
+
+**O teste que confirma:** se fossem eventos mensais, os valores oscilariam para
+cima e para baixo. Só 1,05% das variações mês a mês são negativas. Séries
+acumuladas quase nunca caem.
+
+**Por que importa:** somar essas colunas achando que são fluxo infla tudo por um
+fator de dezenas. E a correção óbvia — diferenciar mês a mês — também não
+funciona, porque 18,5% dos pares órgão-cargo sofrem reprocessamento retroativo.
+A diferença mistura vacância nova com correção de cadastro.
+
+Nem sempre existe conserto. Às vezes o resultado da investigação é descobrir que
+uma pergunta não pode ser respondida com aquele dado, e o trabalho honesto é
+dizer isso em vez de produzir um número.
+
+## 4. `NA` que não é valor ausente
+
+Na coluna de nível de escolaridade, o código de **Nível Apoio** é a string `NA`.
+Leitores de planilha convertem `"NA"` em nulo por padrão.
+
+Resultado: 100.694 linhas de cargos de nível de apoio desapareceram silenciosamente
+da minha primeira leitura. Não deu erro, não deu aviso. Eu cheguei a escrever no
+meu próprio dicionário de dados que "a coluna vem quase sempre vazia no período
+antigo".
+
+Estava errado, e o erro ficou documentado por algumas horas como se fosse
+característica da fonte. Descobri ao cruzar a contagem por nível com o total de
+cargos e ver que não fechava.
+
+```r
+readxl::read_excel(arquivo, na = character())
+```
+
+## 5. Órgãos que trocam de código e deixam casca
+
+Reformas ministeriais renumeram pastas. O Ministério do Meio Ambiente é o código
+40111 até setembro de 2023 e 40211 a partir de outubro. Quem agrupa por código
+tem duas séries curtas onde deveria haver uma longa.
+
+Pior: o código antigo frequentemente **não morre**. A Advocacia-Geral da União
+cai de 8.856 cargos aprovados para 1, com zero ocupados, enquanto o código novo
+abre com 9.074. A casca residual fica ali por anos, com um punhado de cargos.
+
+Quem filtra por sigla pega as duas. Quem filtra por código pega meia série.
+
+A solução foi um de-para explícito — 233 códigos mapeados em 222 entidades
+estáveis, cada mapeamento com nível de confiança e evidência registrados. Mas
+nem tudo se resolve: quando o Ministério da Fazenda se parte em cinco pastas,
+**nenhuma delas "é" o original**. Não existe correspondência 1:1 e forçar uma
+seria inventar. Para esses casos, a única comparação honesta é somar o bloco
+inteiro — e dizer ao leitor que é isso que se está fazendo.
+
+## 6. Duas abas do mesmo arquivo que discordam
+
+Cada planilha tem uma aba agregada por órgão e uma detalhada por cargo. Agregando
+a detalhada, deveria dar a agregada.
+
+Dá, em 24.055 de 24.196 pares órgão-mês. Nos outros 141, não.
+
+A divergência é sistemática e pequena: quatro órgãos apenas — o Ministério da
+Justiça e os ex-territórios do Amapá, Rondônia e Roraima — de junho de 2023 em
+diante, com magnitude entre 1% e 2,5%.
+
+Não consegui explicar a causa, e não é erro do meu empilhamento: está nos
+arquivos de origem. O que dá para fazer é documentar e, ao citar números desses
+órgãos, dizer de qual aba vieram.
+
+Nem todo defeito tem conserto. Todo defeito tem que ter registro.
+
+## O que eu tiraria disso
+
+**Variação suave é a única coisa que se pode conferir sem conhecer o assunto.**
+A rotina que mais me rendeu foi a mais boba: calcular a variação percentual mês a
+mês do total e listar tudo acima de 2%. Ela pegou o mês corrompido, a linha-total
+e a dupla contagem de março de 2018 — três defeitos de naturezas completamente
+diferentes, com quatro linhas de código.
+
+**Identidades contábeis são gratuitas e valem ouro.** Neste dado,
+`vago = aprovada − ocupada` vale em 100% das linhas. Testar isso a cada
+recompilação custa nada e detectaria na hora qualquer erro de alinhamento de
+coluna.
+
+**Desconfie do arquivo mais recente.** É o menos revisado e o que toda análise
+quer usar.
+
+**O dicionário de dados oficial descreve o passado.** A nota técnica desta base
+é de 2018 e declara que o Banco Central e as carreiras de inteligência da ABIN
+estão fora do escopo. A partir de 2021, a ABIN aparece com milhares de cargos. A
+documentação não acompanhou a mudança — e não há aviso em lugar nenhum.
+
+**Escreva o que não deu certo.** Metade do valor deste projeto não está nos
+gráficos: está em saber que as colunas de vacância não servem para medir fluxo
+mensal. Quem for usar esta base depois de mim economiza uma semana lendo esta
+seção.
+
+## O código
+
+Três scripts, todos reproduzíveis do zero:
+
+- `01_compilar.R` — lê os 125 arquivos e produz os Parquet.
+- `02_validar.R` — as conferências descritas aqui. Roda sozinho e falha alto.
+- `03_depara_orgaos.R` — o de-para institucional, com confiança e evidência.
+
+Os dados brutos originais estão versionados. Qualquer número de qualquer artigo
+desta série pode ser refeito do zero — inclusive os errados, se você quiser ver
+onde eu tropecei.
+
+---
+
+*Volta ao início: [A década em que a máquina encolheu](01-panorama.qmd).*

@@ -1,0 +1,13 @@
+# Cabeçalhos exigidos pelo Shinylive, para o Cloudflare Pages.
+#
+# O webR usa SharedArrayBuffer, que o navegador só libera quando a página está
+# "cross-origin isolated". Sem estes dois cabeçalhos o painel cai num modo
+# degradado (canal PostMessage) e pode não carregar.
+#
+# Copiar para a raiz de `public/` do repo do Astro, ou mesclar com o _headers
+# que já existir lá. O caminho abaixo precisa bater com o destino real do app.
+
+/apps/vacancia-federal/*
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: cross-origin

@@ -1,0 +1,282 @@
+---
+title: "Metade dos cargos vagos nunca existiu de verdade"
+subtitle: "A coluna que ninguém olha separa o buraco real do buraco de papel"
+date: today
+categories: [dados abertos, setor público, gestão de pessoas]
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(arrow)
+source(here::here("artigos", "_tema.R"))
+orgaos <- read_parquet(here::here("dados", "cargos_por_orgao.parquet"))
+depara <- read_parquet(here::here("dados", "depara_orgaos.parquet"))
+```
+
+No [artigo anterior](01-panorama.qmd) eu mostrei que o Executivo federal tem
+231.887 cargos vagos e que essa proporção quase não mudou em dez anos. Agora
+vou desmontar esse número, porque metade dele não é o que parece.
+
+## Três colunas, não duas
+
+A planilha mensal do Painel Estatístico de Pessoal traz quatro quantidades por
+órgão. Quase toda análise usa duas — aprovada e ocupada — e calcula o vago pela
+diferença. Mas existe uma terceira coluna no meio, e ela muda tudo:
+
+- **`aprovada`** — cargos criados por lei.
+- **`distribuida`** — desses, quantos o Órgão Central de Gestão de Pessoas
+  efetivamente alocou a algum órgão.
+- **`ocupada`** — desses, quantos têm um servidor dentro.
+
+Isso permite partir a vacância em duas coisas com naturezas completamente
+diferentes:
+
+| | Conta | O que significa |
+|---|---|---|
+| **Nunca distribuído** | `aprovada − distribuida` | A lei autorizou o cargo. Ele nunca foi alocado a lugar nenhum. Não há vaga esperando concurso: há uma linha numa lei. |
+| **Vago após distribuir** | `distribuida − ocupada` | O cargo existe, está lotado num órgão, e está esperando alguém. É o buraco de verdade. |
+
+Somadas, as duas dão o total de cargos vagos. Separadas, contam histórias
+opostas.
+
+## O que a série mostra
+
+```{r}
+#| label: fig-decomposicao
+#| fig-cap: "A área azul é vacância que nunca virou estrutura. Ela ultrapassa a rosa em 2024 e não volta."
+#| fig-height: 4.4
+
+base_decomp <- orgaos |>
+  filter(!competencia %in% MESES_RUINS) |>
+  group_by(data) |>
+  summarise(nunca = sum(aprovada) - sum(distribuida),
+            pos   = sum(distribuida) - sum(ocupada), .groups = "drop") |>
+  mutate(tip = paste0(
+    "<b>", tip_data(data), "</b><br>",
+    "Nunca distribuído: ", tip_n(nunca),
+    " (", pt(100 * nunca / (nunca + pos), 1), "%)<br>",
+    "Vago após distribuição: ", tip_n(pos), "<br>",
+    "<span style='color:", COR$ink3, "'>Total vago: ",
+    tip_n(nunca + pos), "</span>"))
+
+decomp <- base_decomp |>
+  tidyr::pivot_longer(c(nunca, pos), names_to = "tipo", values_to = "n") |>
+  mutate(tipo = factor(tipo, levels = c("pos", "nunca"),
+                       labels = c("Vago após distribuição", "Nunca distribuído")))
+
+p <- ggplot(decomp, aes(data, n, fill = tipo)) +
+  camada_meses_ruins() +
+  geom_area(colour = COR$surface, linewidth = .5) +
+  banda_hover(base_decomp) +
+  annotate("text", x = as.Date("2018-01-01"), y = 42000,
+           label = "Nunca distribuído", colour = "white", size = 3.6,
+           fontface = "bold", hjust = 0) +
+  annotate("text", x = as.Date("2018-01-01"), y = 175000,
+           label = "Vago após distribuição", colour = COR$ink, size = 3.6,
+           fontface = "bold", hjust = 0) +
+  scale_fill_manual(values = c("Nunca distribuído" = COR$s1,
+                               "Vago após distribuição" = COR$s3)) +
+  scale_y_continuous(labels = \(x) paste0(mil(x), " mil"),
+                     expand = expansion(mult = c(0, .05))) +
+  escala_x_serie(.02) +
+  labs(title = "Do que o cargo vago é feito",
+       subtitle = "Decomposição mensal do total de cargos vagos, 2016–2026",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos()
+
+girafe_cargos(p, altura = 4.4)
+```
+
+```{r}
+#| label: fig-fracao
+#| fig-cap: "Oito anos de estabilidade, depois um salto de 17 pontos em dois anos."
+#| fig-height: 3.6
+
+fracao <- orgaos |>
+  filter(!competencia %in% MESES_RUINS) |>
+  group_by(data) |>
+  summarise(pct = 100 * (sum(aprovada) - sum(distribuida)) / sum(vago),
+            .groups = "drop") |>
+  quebrar_lacunas() |>
+  mutate(tip = paste0("<b>", tip_data(data), "</b><br>",
+                      "Nunca distribuídos: ", pt(pct, 1), "% do vago"))
+
+p <- ggplot(fracao, aes(data, pct)) +
+  camada_meses_ruins() +
+  annotate("rect", xmin = as.Date("2016-01-01"), xmax = as.Date("2023-12-01"),
+           ymin = 31, ymax = 36, fill = COR$ink3, alpha = .10) +
+  annotate("text", x = as.Date("2016-06-01"), y = 27,
+           label = "2016–2023: ancorada entre 31% e 36%",
+           colour = COR$ink3, size = 3.1, hjust = 0) +
+  geom_hline(yintercept = 50, colour = COR$ink3, linetype = "22", linewidth = .4) +
+  banda_hover(fracao) +
+  geom_line(colour = COR$s1, linewidth = .85) +
+  rotulo_fim(fracao, "data", "pct", "49,7%", COR$s1) +
+  scale_y_continuous(labels = \(x) paste0(pt(x), "%"), limits = c(0, 60),
+                     breaks = seq(0, 60, 20)) +
+  escala_x_serie(.10) +
+  labs(title = "Quanto da vacância nunca virou estrutura",
+       subtitle = "Cargos nunca distribuídos como proporção do total de vagos",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos()
+
+girafe_cargos(p, altura = 3.6)
+```
+
+Janeiro de cada ano:
+
+| Ano | Vagos | Nunca distribuídos | Vagos após distribuição | **% fantasma** |
+|---|---|---|---|---|
+| 2016 | 257.779 | 91.195 | 166.584 | **35,4%** |
+| 2017 | 257.156 | 85.752 | 171.404 | 33,3% |
+| 2018 | 265.351 | 83.920 | 181.431 | 31,6% |
+| 2019 | 248.578 | 80.273 | 168.305 | 32,3% |
+| 2020 | 246.778 | 86.451 | 160.327 | 35,0% |
+| 2021 | 237.565 | 83.528 | 154.037 | 35,2% |
+| 2022 | 247.149 | 88.168 | 158.981 | 35,7% |
+| 2023 | 248.225 | 87.021 | 161.204 | 35,1% |
+| 2024 | 250.683 | 113.171 | 137.512 | **45,1%** |
+| 2025 | 244.210 | 126.926 | 117.284 | **52,0%** |
+| 2026 | 233.136 | 115.959 | 117.177 | **49,7%** |
+
+Durante oito anos, de 2016 a 2023, a fração fantasma da vacância ficou ancorada
+entre 31% e 36%. Estável, sem tendência.
+
+Aí, entre 2023 e 2025, ela salta de 35,1% para 52,0%.
+
+## O que aconteceu ali
+
+Não foi a vacância que cresceu — ela caiu. O que mudou foi a composição. Em dois
+anos, o número de cargos **distribuídos** despencou de 639.642 para 583.992: 55
+mil cargos que estavam alocados a órgãos deixaram de estar.
+
+O total de cargos aprovados em lei caiu bem menos no mesmo período. O resultado é
+uma máquina em que a autorização legal permanece no papel, mas a alocação a
+órgãos reais recuou.
+
+E o "buraco de verdade" — o cargo distribuído esperando servidor — caiu de 161
+mil para 117 mil. Uma queda de 27% em dois anos.
+
+Ou seja: **as duas metades do número foram em direções opostas.** Quem olha só o
+total vê estabilidade, e a estabilidade é uma média de dois movimentos fortes que
+se cancelam.
+
+Vale uma ressalva de método: essa inflexão coincide com o período de reformas
+ministeriais de 2023, quando pastas foram criadas, partidas e renumeradas em
+massa. Parte do movimento pode ser reclassificação administrativa, não decisão de
+política de pessoal. Separar as duas exige documentação normativa que o dado
+sozinho não traz — e eu não vou afirmar o que não posso demonstrar.
+
+## Onde a vacância fantasma se concentra
+
+Ela não está espalhada. Em maio de 2026, **treze órgãos respondem por 80%** de
+todos os cargos nunca distribuídos, e os três maiores sozinhos fazem 56,5%.
+
+```{r}
+#| label: fig-concentracao
+#| fig-cap: "Treze órgãos concentram 80% do total. Os três maiores fazem 56,5%."
+#| fig-height: 4
+
+conc <- orgaos |>
+  filter(competencia == 202605) |>
+  mutate(nunca = aprovada - distribuida,
+         pct   = 100 * nunca / aprovada) |>
+  arrange(desc(nunca)) |> head(10) |>
+  mutate(rotulo = paste0(sigla_orgao, "  ", pt(pct, 1), "% da pasta"),
+         sigla_orgao = forcats::fct_reorder(sigla_orgao, nunca),
+         tip = paste0("<b>", sigla_orgao, "</b><br>",
+                      "Nunca distribuídos: ", tip_n(nunca), "<br>",
+                      "Aprovados na pasta: ", tip_n(aprovada), "<br>",
+                      "<span style='color:", COR$ink3, "'>",
+                      pt(pct, 1), "% da pasta nunca foi distribuída</span>"))
+
+p <- ggplot(conc, aes(nunca, sigla_orgao)) +
+  geom_col_interactive(aes(tooltip = tip, data_id = sigla_orgao),
+                       fill = COR$s1, width = .68) +
+  geom_text(aes(label = paste0(pt(nunca), "   ", pt(pct, 1), "% da pasta")),
+            hjust = -0.06, size = 3.2, colour = COR$ink2) +
+  scale_x_continuous(expand = expansion(mult = c(0, .34))) +
+  labs(title = "Onde a vacância fantasma se concentra",
+       subtitle = "Cargos nunca distribuídos, maio de 2026",
+       caption = "Fonte: Painel Estatístico de Pessoal (MGI). Elaboração própria.") +
+  tema_cargos() +
+  theme(panel.grid.major.y = element_blank(),
+        axis.text.x = element_blank())
+
+girafe_cargos(p, altura = 4, tipo = "barra")
+```
+
+| Órgão | Aprovados | Distribuídos | Nunca distribuídos | % da pasta |
+|---|---|---|---|---|
+| Ministério da Educação | 28.568 | 1.881 | 26.687 | **93,4%** |
+| Ministério da Fazenda | 46.685 | 20.030 | 26.655 | 57,1% |
+| Min. da Gestão e Inovação | 24.129 | 11.935 | 12.194 | 50,5% |
+| Ministério da Saúde | 63.974 | 58.449 | 5.525 | 8,6% |
+| Min. da Agricultura e Pecuária | 9.409 | 5.689 | 3.720 | 39,5% |
+| Agência Bras. de Inteligência | 4.577 | 1.447 | 3.130 | 68,4% |
+| Min. do Trabalho e Emprego | 8.534 | 5.468 | 3.066 | 35,9% |
+| Controladoria-Geral da União | 5.060 | 2.671 | 2.389 | 47,2% |
+| Órgão Central do SIPEC | 2.345 | 0 | 2.345 | **100,0%** |
+
+O caso do MEC salta aos olhos: de 28.568 cargos aprovados em lei, **1.881 foram
+distribuídos**. Noventa e três por cento da estrutura autorizada do ministério
+nunca foi alocada.
+
+Aqui é preciso cuidado, e vou explicitar o limite. O MEC tem uma peculiaridade
+estrutural: universidades e institutos federais têm códigos de órgão próprios na
+base (a família 26xxx). É plausível que o código central do MEC funcione como um
+reservatório de cargos autorizados que são depois distribuídos a essas
+instituições, e que a foto de um mês pegue esse reservatório cheio. **Isso é uma
+hipótese, não uma conclusão** — confirmá-la exige entender o fluxo administrativo
+de distribuição, que não está no dado.
+
+Já o Órgão Central do SIPEC, com 2.345 cargos aprovados e zero distribuídos, é
+inequívoco: é um estoque de autorização pura.
+
+## Por que isso importa
+
+Quando alguém diz "faltam 232 mil servidores no Executivo federal", está fazendo
+duas afirmações embutidas: que existem 232 mil postos de trabalho definidos, e
+que eles estão vazios.
+
+A primeira é falsa para metade do número.
+
+Isso muda a conversa de política pública de forma concreta. Um cargo distribuído
+e vago é um problema de **provimento**: precisa de concurso, de orçamento, de
+autorização para nomear. Um cargo nunca distribuído é um problema de outra
+natureza — ou é reserva legal deliberada, ou é autorização obsoleta que ninguém
+revogou, ou é gargalo no próprio processo de distribuição.
+
+São diagnósticos diferentes, com remédios diferentes. Tratá-los como o mesmo
+número atrapalha os dois.
+
+E há uma implicação para quem cobra: a métrica que interessa para acompanhar
+capacidade estatal não é o total de vagos. É `distribuida − ocupada` — que caiu
+27% em dois anos e que quase ninguém está olhando.
+
+## Como reproduzir
+
+```r
+library(arrow); library(dplyr)
+
+orgaos <- read_parquet("dados/cargos_por_orgao.parquet")
+
+orgaos |>
+  filter(competencia == 202605) |>
+  summarise(
+    aprovada          = sum(aprovada),
+    distribuida       = sum(distribuida),
+    ocupada           = sum(ocupada),
+    nunca_distribuido = sum(aprovada) - sum(distribuida),
+    vago_pos_distrib  = sum(distribuida) - sum(ocupada)
+  )
+```
+
+Compilação completa em `code/01_compilar.R`. Descarte 2018-03, 2025-04 a 2025-06
+e 2026-06 — os motivos estão no [artigo anterior](01-panorama.qmd).
+
+---
+
+*Próximo: [Por que os cargos vagam](03-por-que-vagam.qmd) — 77% é aposentadoria,
+e a segunda causa não é a que você imagina.*
