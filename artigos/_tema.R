@@ -23,7 +23,11 @@ suppressPackageStartupMessages({
 #     dados |> tabela(titulo = "...", subtitulo = "...")
 #
 # Nao reimplemente o estilo aqui; edite o pacote theoviz.
-tabela <- tabela_gt
+#
+# O `modo = "escuro"` nao e detalhe: sem ele o gt crava `background-color:
+# #FFFFFF` inline, e nenhuma folha de estilo derruba estilo inline -- a tabela
+# sairia como retangulo branco no meio da pagina escura do artigo.
+tabela <- function(...) tabela_gt(..., modo = "escuro")
 
 # --- paleta ---------------------------------------------------------------
 # As cores vem do theoviz, que e a fonte unica -- nao literais aqui. A validacao
@@ -31,8 +35,13 @@ tabela <- tabela_gt
 # Os NOMES locais (COR$s1, COR$ink2, ...) sao preservados de proposito: os .qmd
 # ja escritos dependem deles.
 
-.p <- paleta()
-.t <- tinta()
+#
+# MODO ESCURO (2026-08-15): os artigos vao ao ar em pagina escura e ate aqui
+# pediam ao theoviz o modo CLARO. O efeito era visivel em toda figura -- o
+# `surface` abaixo e pintado no `plot.background`, entao cada grafico levava um
+# retangulo #fcfcfb, quase branco, para dentro da pagina quase preta.
+.p <- paleta(modo = "escuro")
+.t <- tinta(modo = "escuro")
 
 COR <- list(
   s1      = unname(.p[["s1"]]),  # azul     — aprovados / nunca distribuído
@@ -143,11 +152,16 @@ rotulo_fim <- function(df, x, y, texto, cor, dx = 40) {
 # e destruiu o gráfico — apagou as três linhas, as faixas, o subtítulo e a
 # fonte. Não troque sem repetir o teste.
 
+# O tooltip NAO usa COR$surface. No modo escuro o `surface` e o proprio chao da
+# pagina (#0d1014), e um tooltip da cor do chao nao se destaca da figura -- ele
+# flutua ACIMA dela, e no sistema visual do site o que fica acima do chao e a
+# chapa. Sombra tambem sai: o sistema separa plano por superficie e filete, nao
+# por sombra.
 TOOLTIP_CSS <- sprintf(
   paste0("background:%s;color:%s;padding:7px 10px;border:1px solid %s;",
-         "border-radius:5px;box-shadow:0 2px 8px #0000001f;",
+         "border-radius:0;",
          "font-family:inherit;font-size:12.5px;line-height:1.45;"),
-  COR$surface, COR$ink, COR$grid)
+  site("chapa"), site("titulo"), site("filete"))
 
 # Banda vertical invisível, uma por período. Serve de alvo de hover — bem maior
 # que a linha — e mostra num tooltip só todas as séries daquele mês. É o
@@ -166,7 +180,10 @@ banda_hover <- function(df, col_x = "data", col_tip = "tip", meia_largura = 16) 
 # banda; na barra, a própria barra.
 girafe_cargos <- function(p, altura = 4.2, tipo = c("serie", "barra")) {
   tipo <- match.arg(tipo)
-  css <- if (tipo == "serie") "fill:#8987811c;stroke:none;"
+  # O realce da banda era `#8987811c` -- o cinza QUENTE do sistema visual
+  # anterior, com 11% de alfa, cravado a mao. Passa a sair do pacote: a chapa do
+  # site com alfa e o "algo acabou de acender aqui" do sistema novo.
+  css <- if (tipo == "serie") paste0("fill:", site("filete"), "80;stroke:none;")
          else                 "fill-opacity:.72;stroke:none;"
   girafe(
     ggobj = p, width_svg = 8, height_svg = altura,
