@@ -121,6 +121,17 @@ provas diferentes: sei fazer dentro da máquina, e sei fazer à vista de todos.
 - [x] Dicionário de dados com as armadilhas
 - [x] Seis artigos em rascunho, com **10 gráficos implementados** em ggplot2
 - [x] Tema visual compartilhado (`artigos/_tema.R`) com a paleta validada
+- [x] **Tema no modo escuro do `theoviz` (2026-08-15).** Os artigos vão ao ar em
+      página escura e o tema pedia o **modo claro** — e aqui o efeito era o mais
+      visível dos três projetos: `COR$surface` é pintado no `plot.background`
+      **e** no `panel.background`, então cada gráfico levava um retângulo
+      `#fcfcfb`, quase branco, para dentro da página quase preta.
+      Duas coisas **não** seguiram o tema, de propósito: o tooltip deixou de usar
+      `COR$surface` (no escuro ele é o próprio chão da página, e um tooltip da
+      cor do chão não se distingue da figura — passou à chapa, `site("chapa")`),
+      e o realce de hover da banda deixou de ser o `#8987811c` cravado à mão, que
+      era o cinza **quente** do sistema aposentado.
+      Exige `theoviz` ≥ 0.3.0.
 - [x] **HTML renderizado** em `_site/` para revisão
 - [x] Especificação do painel + tabelas agregadas + mockup visual
 - [x] Pauta editorial com hipóteses testadas
